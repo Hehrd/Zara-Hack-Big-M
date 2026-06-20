@@ -52,6 +52,10 @@ public class LocationRecommendationService {
     }
 
     public CombinedLocationResponse recommend(BusinessLocationRequest request) {
+        return recommend(request, null);
+    }
+
+    public CombinedLocationResponse recommend(BusinessLocationRequest request, Integer requestedCount) {
         String city = request.city() == null ? "" : request.city().trim();
         if (city.isEmpty()) {
             throw new CustomException(HttpStatus.BAD_REQUEST, "A city is required");
@@ -69,11 +73,12 @@ public class LocationRecommendationService {
                 analysis.businessNeeds().businessType(),
                 analysis.businessNeeds().needs(),
                 selectedIds,
-                city);
+                city,
+                request.region());
 
         // 3-5. Spark scoring (write input -> spark-submit -> read output).
         SparkScoringInput sparkInput = new SparkScoringInput(
-                runId, city, selectedIds, analysis.layerWeights(), points);
+                runId, city, selectedIds, analysis.layerWeights(), points, request.region());
         SparkOutput sparkOutput = sparkScoringRunner.run(sparkInput);
         List<LsoaScore> scores = sparkOutput.lsoaScores();
         if (scores == null || scores.isEmpty()) {
@@ -84,9 +89,17 @@ public class LocationRecommendationService {
                             + "This proof of concept currently covers London only.");
         }
 
-        // 6. Top-N ranked locations + explanations.
-        int n = request.requestedResultCount() != null && request.requestedResultCount() > 0
-                ? request.requestedResultCount() : properties.resultCount();
+        // 6. Top-N ranked locations + explanations. Precedence: ?count query
+        // param, then the request body's requested_result_count, then the default.
+        Integer bodyCount = request.requestedResultCount();
+        int n;
+        if (requestedCount != null && requestedCount > 0) {
+            n = requestedCount;
+        } else if (bodyCount != null && bodyCount > 0) {
+            n = bodyCount;
+        } else {
+            n = properties.resultCount();
+        }
         List<LsoaScore> ranked = scores.subList(0, Math.min(n, scores.size()));
         List<LocationExplanation> explanations = explain(ranked, analysis);
 

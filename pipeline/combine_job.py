@@ -60,6 +60,28 @@ def main():
         return
 
     layers = precomputed["lsoas"]
+
+    # Optional drawn region (GeoJSON Polygon): restrict scoring to LSOAs whose
+    # centroid falls inside the polygon, BEFORE max computation so normalization
+    # is relative to the region. Invalid geometry falls back to the whole city.
+    region = req.get("region")
+    if region:
+        try:
+            poly = shape(region)
+            filtered = []
+            for rec in layers:
+                c = rec.get("centroid") or {}
+                lng = c.get("longitude")
+                lat = c.get("latitude")
+                if lng is None or lat is None:
+                    continue
+                if poly.contains(Point(float(lng), float(lat))):
+                    filtered.append(rec)
+            if filtered:
+                layers = filtered
+        except Exception as exc:  # noqa: BLE001 - fall back to whole city
+            print(f"Invalid region geometry, scoring whole city: {exc}", file=sys.stderr)
+
     selected = list(req.get("selected_categories", []))
     weights = {w["category_id"]: float(w.get("weight", 0.0)) for w in req.get("layer_weights", [])}
     points = req.get("google_maps_points", [])
