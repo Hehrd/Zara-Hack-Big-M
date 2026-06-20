@@ -2,13 +2,25 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { GoogleMapsOverlay } from '@deck.gl/google-maps'
 import { GeoJsonLayer } from '@deck.gl/layers'
-import { Building2, Compass, Eraser, Flag, LoaderCircle, MapPin, Rotate3D, Search, Sparkles, Trophy, TrendingDown, TrendingUp } from 'lucide-react'
+import { Building2, Compass, Eraser, Flag, LoaderCircle, MapPin, Rotate3D, Sparkles, Trophy, TrendingDown, TrendingUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { loadGoogleMaps } from '@/lib/googleMaps'
 import { createLocationRecommendations } from '@/api/recommendations'
 
 const LONDON_CENTER = { lat: 51.5074, lng: -0.1278 }
+
+function pointInPolygon(point, polygon) {
+  let inside = false
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const a = polygon[i]
+    const b = polygon[j]
+    const intersects = ((a.lat > point.lat) !== (b.lat > point.lat))
+      && point.lng < ((b.lng - a.lng) * (point.lat - a.lat)) / (b.lat - a.lat) + a.lng
+    if (intersects) inside = !inside
+  }
+  return inside
+}
 
 // Diverging score ramp (low → high) over the deck.gl heatmap.
 function scoreColor(t) {
@@ -58,35 +70,49 @@ function formatLayerName(id) {
 
 // Fade the grid as the user zooms in so streets stay readable underneath.
 // City view (zoom ~10) stays solid; street view (zoom ~16) becomes faint.
-function zoomAlpha(zoom, is3D) {
-  const base = is3D ? 210 : 150
-  const min = is3D ? 70 : 45
+function zoomAlpha(zoom) {
+  const base = 150
+  const min = 45
   const t = Math.max(0, Math.min(1, (zoom - 10) / 6))
   return Math.round(base - (base - min) * t)
 }
 
 function buildHeatmapLayer(featureCollection, is3D, zoom, selectedCode, onPick) {
-  const alpha = zoomAlpha(zoom, is3D)
+  const alpha = zoomAlpha(zoom)
   return new GeoJsonLayer({
     id: 'lsoa-heatmap',
     data: featureCollection,
     stroked: true,
     filled: true,
     extruded: is3D,
-    getFillColor: (f) => [...scoreColor(f.properties.t), alpha],
-    getLineColor: (f) => (f.properties.lsoaCode === selectedCode ? [255, 255, 255, 255] : [255, 255, 255, 60]),
-    getLineWidth: (f) => (f.properties.lsoaCode === selectedCode ? 3 : 0.5),
+    // Adjacent polygons generate coincident side faces. Cull the inward-facing
+    // copy so those walls do not fight for the same depth while the map moves.
+    parameters: { cullMode: 'back' },
+    // Suppress low-value areas so peaks read as recommendations instead of a
+    // uniformly busy field. The zoom fade still applies to the whole surface.
+    getFillColor: (f) => {
+      const prominence = is3D ? 0.22 + 0.78 * Math.pow(f.properties.t, 1.7) : 1
+      return [...scoreColor(f.properties.t), Math.round(alpha * prominence)]
+    },
+    getLineColor: (f) => {
+      if (f.properties.lsoaCode === selectedCode) return [255, 255, 255, 255]
+      return is3D ? [255, 255, 255, 0] : [255, 255, 255, 60]
+    },
+    getLineWidth: (f) => (f.properties.lsoaCode === selectedCode ? 3 : is3D ? 0 : 0.5),
     lineWidthUnits: 'pixels',
-    getElevation: (f) => f.properties.t * 2600,
+    // A nonlinear scale creates distinct peaks instead of giving every area a
+    // similarly tall wall. Keep a small base so low areas remain discoverable.
+    getElevation: (f) => is3D ? 80 + Math.pow(f.properties.t, 2.4) * 4200 : 0,
     lineWidthMinPixels: 0.5,
     pickable: true,
     autoHighlight: true,
     highlightColor: [255, 255, 255, 90],
     onClick: (info) => onPick(info?.object?.properties ?? null),
     updateTriggers: {
-      getFillColor: [alpha],
-      getLineColor: [selectedCode],
-      getLineWidth: [selectedCode],
+      getFillColor: [alpha, is3D],
+      getLineColor: [selectedCode, is3D],
+      getLineWidth: [selectedCode, is3D],
+      getElevation: [is3D],
     },
   })
 }
@@ -98,6 +124,10 @@ export function MapsPage() {
   const mapsEventRef = useRef(null)
   const cameraTransitionListenerRef = useRef(null)
   const zoomListenerRef = useRef(null)
+  const areaModeRef = useRef('city')
+  const polygonConstructorRef = useRef(null)
+  const selectionPolygonRef = useRef(null)
+  const polygonPathListenersRef = useRef([])
 
   const [mapError, setMapError] = useState('')
   const [is3D, setIs3D] = useState(false)
@@ -107,22 +137,59 @@ export function MapsPage() {
   const [description, setDescription] = useState('A cozy independent specialty coffee shop for young professionals and students')
   const [selected, setSelected] = useState(null)
   const [zoom, setZoom] = useState(10)
+  const [minimumScore, setMinimumScore] = useState(null)
+  const [areaMode, setAreaMode] = useState('city')
+  const [customPoints, setCustomPoints] = useState([])
+  const [submittedAreaPoints, setSubmittedAreaPoints] = useState([])
+  const [requestedResultCount, setRequestedResultCount] = useState(3)
+  const [submittedResultCount, setSubmittedResultCount] = useState(3)
 
   const recommend = useMutation({ mutationFn: createLocationRecommendations })
-  const result = recommend.data
+  const rawResult = recommend.data
+  const result = useMemo(() => {
+    if (!rawResult || submittedAreaPoints.length < 3) return rawResult
+    const contains = (area) => area.centroid && pointInPolygon(
+      { lat: area.centroid.latitude, lng: area.centroid.longitude },
+      submittedAreaPoints,
+    )
+    const heatmap = rawResult.heatmap_layer?.filter(contains) ?? []
+    const allowedCodes = new Set(heatmap.map((area) => area.lsoa_code))
+    return {
+      ...rawResult,
+      heatmap_layer: heatmap,
+      ranked_locations: heatmap
+        .filter((area) => allowedCodes.has(area.lsoa_code))
+        .sort((a, b) => b.final_score - a.final_score)
+        .slice(0, submittedResultCount),
+    }
+  }, [rawResult, submittedAreaPoints, submittedResultCount])
   const mapId = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID
 
   const featureCollection = useMemo(
     () => (result?.heatmap_layer ? toFeatureCollection(result.heatmap_layer) : null),
     [result],
   )
+  const scoreRange = useMemo(() => {
+    const scores = result?.heatmap_layer?.map((area) => area.final_score) ?? []
+    if (!scores.length) return null
+    return { min: Math.min(...scores), max: Math.max(...scores) }
+  }, [result])
+  const effectiveMinimumScore = minimumScore ?? scoreRange?.min ?? null
+  const visibleFeatureCollection = useMemo(() => {
+    if (!featureCollection || effectiveMinimumScore === null) return featureCollection
+    return {
+      ...featureCollection,
+      features: featureCollection.features.filter((feature) => feature.properties.score >= effectiveMinimumScore),
+    }
+  }, [featureCollection, effectiveMinimumScore])
 
   useEffect(() => {
     let active = true
     loadGoogleMaps()
-      .then(({ Map, mapsEvent }) => {
+      .then(({ Map, Polygon, mapsEvent }) => {
         if (!active || !mapElement.current) return
         mapsEventRef.current = mapsEvent
+        polygonConstructorRef.current = Polygon
         // VECTOR routes through WebGLOverlayView, which Google disables without a valid
         // Map ID — leaving deck's canvas unsized and the heatmap invisible. Fall back to
         // RASTER unless a Map ID is configured (3D tilt also needs VECTOR + a Map ID).
@@ -139,20 +206,54 @@ export function MapsPage() {
         zoomListenerRef.current = mapsEvent.addListener(mapRef.current, 'zoom_changed', () => {
           setZoom(mapRef.current.getZoom())
         })
+        mapsEvent.addListener(mapRef.current, 'click', (event) => {
+          if (areaModeRef.current !== 'custom') return
+          if (!selectionPolygonRef.current) {
+            selectionPolygonRef.current = new polygonConstructorRef.current({
+              map: mapRef.current,
+              paths: [[event.latLng]],
+              editable: true,
+              fillColor: '#10b981',
+              fillOpacity: 0.12,
+              strokeColor: '#047857',
+              strokeOpacity: 0.9,
+              strokeWeight: 2,
+            })
+            const path = selectionPolygonRef.current.getPath()
+            const syncPoints = () => setCustomPoints(path.getArray().map((point) => ({ lat: point.lat(), lng: point.lng() })))
+            polygonPathListenersRef.current = ['insert_at', 'set_at', 'remove_at'].map((name) => mapsEvent.addListener(path, name, syncPoints))
+            const deleteVertex = (polygonEvent) => {
+              polygonEvent.domEvent?.preventDefault()
+              if (polygonEvent.vertex === undefined || polygonEvent.vertex === null) return
+              path.removeAt(polygonEvent.vertex)
+            }
+            // `contextmenu` replaces the deprecated `rightclick` event in newer
+            // Google Maps builds; keep both for compatibility with older builds.
+            polygonPathListenersRef.current.push(
+              mapsEvent.addListener(selectionPolygonRef.current, 'contextmenu', deleteVertex),
+              mapsEvent.addListener(selectionPolygonRef.current, 'rightclick', deleteVertex),
+            )
+            syncPoints()
+          } else {
+            selectionPolygonRef.current.getPath().push(event.latLng)
+          }
+        })
       })
       .catch((error) => active && setMapError(error.message))
     return () => {
       active = false
       cameraTransitionListenerRef.current?.remove()
       zoomListenerRef.current?.remove()
+      polygonPathListenersRef.current.forEach((listener) => listener.remove())
+      selectionPolygonRef.current?.setMap(null)
       overlayRef.current?.setMap(null)
     }
   }, [mapId])
 
   useEffect(() => {
-    if (!overlayRef.current || !featureCollection) return
-    overlayRef.current.setProps({ layers: [buildHeatmapLayer(featureCollection, is3D, zoom, selected?.lsoaCode, setSelected)] })
-  }, [featureCollection, is3D, zoom, selected])
+    if (!overlayRef.current || !visibleFeatureCollection) return
+    overlayRef.current.setProps({ layers: [buildHeatmapLayer(visibleFeatureCollection, is3D, zoom, selected?.lsoaCode, setSelected)] })
+  }, [visibleFeatureCollection, is3D, zoom, selected])
 
   useEffect(() => {
     const ranked = result?.ranked_locations ?? []
@@ -168,7 +269,34 @@ export function MapsPage() {
     const trimmedDescription = description.trim()
     if (!trimmedCity || !trimmedDescription) return
     setSelected(null)
-    recommend.mutate({ city: trimmedCity, businessDescription: trimmedDescription, requestedResultCount: 3 })
+    setMinimumScore(null)
+    setSubmittedAreaPoints(areaMode === 'custom' ? customPoints : [])
+    const area = areaMode === 'custom'
+      ? { type: 'polygon', label: 'Custom map area', points: customPoints }
+      : { type: 'city', label: trimmedCity }
+    const resultCount = Math.max(1, Math.min(20, Number(requestedResultCount) || 1))
+    setRequestedResultCount(resultCount)
+    setSubmittedResultCount(resultCount)
+    recommend.mutate({ city: trimmedCity, area, businessDescription: trimmedDescription, requestedResultCount: resultCount })
+    if (areaMode === 'custom') clearCustomArea()
+  }
+
+  function clearCustomArea() {
+    polygonPathListenersRef.current.forEach((listener) => listener.remove())
+    polygonPathListenersRef.current = []
+    selectionPolygonRef.current?.setMap(null)
+    selectionPolygonRef.current = null
+    setCustomPoints([])
+  }
+
+  function changeAreaMode(mode) {
+    setAreaMode(mode)
+    areaModeRef.current = mode
+    if (mode === 'city') clearCustomArea()
+  }
+
+  function undoCustomPoint() {
+    selectionPolygonRef.current?.getPath()?.pop()
   }
 
   function toggle3D() {
@@ -184,13 +312,42 @@ export function MapsPage() {
       setTransitionTarget(null)
       cameraTransitionListenerRef.current = null
     })
-    mapRef.current.setTilt(next ? 45 : 0)
+    mapRef.current.setTilt(next ? 55 : 0)
     mapRef.current.setHeading(next ? 20 : 0)
+  }
+
+  function adjustTilt(delta) {
+    if (!mapRef.current || !is3D) return
+    const current = mapRef.current.getTilt() ?? 55
+    mapRef.current.setTilt(Math.max(20, Math.min(67.5, current + delta)))
+  }
+
+  function rotateMap(delta) {
+    if (!mapRef.current || !is3D) return
+    const current = mapRef.current.getHeading() ?? 0
+    mapRef.current.setHeading((current + delta + 360) % 360)
+  }
+
+  function showRankedLocation(location) {
+    setSelected({
+      lsoaCode: location.lsoa_code,
+      lsoaName: location.lsoa_name,
+      score: location.final_score,
+    })
+    if (!mapRef.current || !location.centroid) return
+    mapRef.current.panTo({
+      lat: location.centroid.latitude,
+      lng: location.centroid.longitude,
+    })
+    mapRef.current.setZoom(14)
   }
 
   function clearMap() {
     recommend.reset()
     setSelected(null)
+    setMinimumScore(null)
+    setSubmittedAreaPoints([])
+    clearCustomArea()
     overlayRef.current?.setProps({ layers: [] })
     setIs3D(false)
     setIsTransitioning(false)
@@ -215,47 +372,75 @@ export function MapsPage() {
         <Button variant="outline" className="bg-white/95 shadow-md backdrop-blur" onClick={clearMap} disabled={!result}><Eraser /> Clear map</Button>
         <Button variant="outline" className="bg-white/95 shadow-md backdrop-blur" onClick={toggle3D} disabled={!mapId || isTransitioning} title={mapId ? 'Toggle map tilt' : 'Add VITE_GOOGLE_MAPS_MAP_ID to enable 3D'}>{isTransitioning ? <LoaderCircle className="animate-spin" /> : <Rotate3D />} {isTransitioning ? 'Switching…' : is3D ? '2D view' : '3D view'}</Button>
       </div>
+      {is3D && !isTransitioning && <div className="absolute right-4 top-16 z-20 flex items-center gap-1 rounded-xl border bg-white/95 p-1 shadow-md backdrop-blur lg:right-6 lg:top-[4.75rem]" aria-label="3D camera controls">
+        <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => rotateMap(-15)} title="Rotate left" aria-label="Rotate left">↶</Button>
+        <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => adjustTilt(-7.5)} title="Lower camera tilt">Tilt −</Button>
+        <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => adjustTilt(7.5)} title="Raise camera tilt">Tilt +</Button>
+        <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => rotateMap(15)} title="Rotate right" aria-label="Rotate right">↷</Button>
+      </div>}
 
       <aside className="absolute inset-x-3 bottom-3 z-20 max-h-[72%] overflow-auto rounded-[24px] border bg-white/96 p-5 shadow-[0_24px_70px_-20px_rgba(14,35,27,.45)] backdrop-blur lg:inset-y-5 lg:left-5 lg:right-auto lg:max-h-none lg:w-[380px] lg:rounded-[28px] lg:p-6">
         <div className="mb-6 flex items-start justify-between"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Locus explorer</p><h1 className="mt-2 text-2xl font-semibold tracking-[-0.035em]">Find your next area</h1><p className="mt-2 text-sm leading-6 text-muted-foreground">Describe your business and a city. We score every LSOA and map the best areas.</p></div><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-700"><Compass className="size-5" /></span></div>
 
         <form className="space-y-4" onSubmit={handleSubmit}>
-          <label className="block space-y-2 text-sm font-medium">City
+          <div className="space-y-2"><p className="text-sm font-medium">Target area</p><div className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1">
+            <Button type="button" size="sm" variant={areaMode === 'city' ? 'default' : 'ghost'} onClick={() => changeAreaMode('city')}>City</Button>
+            <Button type="button" size="sm" variant={areaMode === 'custom' ? 'default' : 'ghost'} onClick={() => changeAreaMode('custom')}>Pick on map</Button>
+          </div></div>
+          {areaMode === 'city' ? <label className="block space-y-2 text-sm font-medium">City or neighborhood
             <div className="relative">
               <MapPin className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input value={city} onChange={(e) => setCity(e.target.value)} className="h-11 bg-white pl-10" placeholder="London" />
             </div>
             <span className="text-[11px] font-normal text-muted-foreground">Proof of concept: London has demographic data loaded. Other cities are accepted but have no layers yet.</span>
-          </label>
+          </label> : <div className="rounded-xl border border-dashed p-3 text-xs leading-5 text-muted-foreground">
+            <span className={customPoints.length >= 3 ? 'font-semibold text-emerald-800' : ''}>{customPoints.length >= 3 ? 'Custom shape ready' : 'Draw a custom shape'}</span><br />
+            {customPoints.length === 0 ? 'Click at least three points on the map.' : `${customPoints.length} ${customPoints.length === 1 ? 'point' : 'points'} selected · drag to adjust · right-click a point to delete it`}
+            {customPoints.length > 0 && <div className="mt-2 flex gap-2"><Button type="button" size="xs" variant="outline" onClick={undoCustomPoint}>Undo point</Button><Button type="button" size="xs" variant="ghost" onClick={clearCustomArea}>Clear</Button></div>}
+          </div>}
           <label className="block space-y-2 text-sm font-medium">Business description
             <div className="relative">
               <Building2 className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" />
               <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} className="w-full rounded-md border border-input bg-white p-3 pl-10 text-sm leading-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" placeholder="e.g. A premium yoga studio targeting affluent professionals" />
             </div>
           </label>
+          <label className="block space-y-2 text-sm font-medium">Number of top areas
+            <Input type="number" min="1" max="20" step="1" value={requestedResultCount} onChange={(event) => setRequestedResultCount(event.target.value)} className="h-11 bg-white" />
+            <span className="text-[11px] font-normal text-muted-foreground">Choose between 1 and 20 recommendations.</span>
+          </label>
           {recommend.error && <p role="alert" className="rounded-xl bg-destructive/10 p-3 text-xs text-destructive">{recommend.error.response?.data?.message || recommend.error.message}</p>}
-          <Button type="submit" className="h-11 w-full" disabled={recommend.isPending || !description.trim() || !city.trim()}>{recommend.isPending ? <><LoaderCircle className="animate-spin" /> Building opportunity map…</> : <><Search /> Analyze this area</>}</Button>
+          <Button type="submit" className="h-11 w-full" disabled={recommend.isPending || !description.trim() || !city.trim() || (areaMode === 'custom' && customPoints.length < 3)}>{recommend.isPending ? <><LoaderCircle className="animate-spin" /> Building opportunity map…</> : <><Sparkles /> Analyze this area</>}</Button>
         </form>
 
         {recommend.isPending && <p className="mt-4 text-xs leading-5 text-muted-foreground">Running the model, Google Places lookup, and the Spark scoring job across ~5,000 LSOAs. This can take up to a minute.</p>}
 
         {!result && !recommend.isPending && <div className="mt-6 rounded-2xl bg-[#f3f6f1] p-4"><div className="flex items-center gap-2 text-sm font-medium"><Sparkles className="size-4 text-emerald-700" /> What happens next</div><p className="mt-2 text-xs leading-5 text-muted-foreground">The backend scores every area, returns a ranked surface, and Locus colors the map. Click any area to inspect its score.</p></div>}
 
-        {result && <ResultPanel result={result} selected={selected} selectedExplanation={selectedExplanation} explanationFor={explanationFor} />}
+        {result && <ResultPanel result={result} selected={selected} selectedExplanation={selectedExplanation} explanationFor={explanationFor} onLocationSelect={showRankedLocation} />}
       </aside>
 
       {result && (
-        <div className="absolute bottom-[calc(72%+24px)] right-4 z-20 w-48 rounded-2xl border bg-white/94 p-3 text-xs shadow-lg backdrop-blur lg:bottom-6 lg:right-6">
-          <div className="mb-2 font-medium">Opportunity score</div>
+        <div className="absolute bottom-[calc(72%+24px)] right-4 z-20 w-56 rounded-2xl border bg-white/94 p-3 text-xs shadow-lg backdrop-blur lg:bottom-6 lg:right-6">
+          <div className="mb-2 flex items-center justify-between gap-2"><span className="font-medium">Minimum score</span><span className="font-semibold tabular-nums">{effectiveMinimumScore?.toFixed(3)}</span></div>
+          {scoreRange && <input
+            type="range"
+            className="mb-2 w-full accent-emerald-600"
+            min={scoreRange.min}
+            max={scoreRange.max}
+            step={(scoreRange.max - scoreRange.min) / 100 || 0.001}
+            value={effectiveMinimumScore ?? scoreRange.min}
+            onChange={(event) => setMinimumScore(Number(event.target.value))}
+            aria-label="Minimum opportunity score"
+          />}
           <div className="h-2 w-full rounded-full" style={{ background: 'linear-gradient(90deg, rgb(30,58,138), rgb(16,185,129), rgb(250,204,21), rgb(239,68,68))' }} />
-          <div className="mt-1 flex justify-between text-[10px] text-muted-foreground"><span>Low</span><span>High</span></div>
+          <div className="mt-1 flex justify-between text-[10px] text-muted-foreground"><span>{scoreRange?.min.toFixed(3)}</span><span>{scoreRange?.max.toFixed(3)}</span></div>
         </div>
       )}
     </div>
   )
 }
 
-function ResultPanel({ result, selected, selectedExplanation, explanationFor }) {
+function ResultPanel({ result, selected, selectedExplanation, explanationFor, onLocationSelect }) {
   return (
     <div className="mt-6 space-y-5 border-t pt-5">
       <div>
@@ -283,7 +468,13 @@ function ResultPanel({ result, selected, selectedExplanation, explanationFor }) 
           const explanation = explanationFor(loc.lsoa_code)
           const weights = Object.entries(loc.weighted_layer_values || {}).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
           return (
-            <div key={loc.lsoa_code} className="rounded-2xl border bg-white p-4">
+            <button
+              key={loc.lsoa_code}
+              type="button"
+              className={`w-full rounded-2xl border bg-white p-4 text-left transition hover:border-emerald-400 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${selected?.lsoaCode === loc.lsoa_code ? 'border-emerald-500 ring-2 ring-emerald-500/20' : ''}`}
+              onClick={() => onLocationSelect(loc)}
+              aria-label={`Show ${loc.lsoa_name} on the map`}
+            >
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <p className="text-sm font-semibold">#{index + 1} · {loc.lsoa_name}</p>
@@ -310,7 +501,7 @@ function ResultPanel({ result, selected, selectedExplanation, explanationFor }) 
                   <span className={`mt-2 inline-block rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${explanation.provider?.includes('Grok') ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-600'}`}>{explanation.provider}</span>
                 </div>
               )}
-            </div>
+            </button>
           )
         })}
       </div>

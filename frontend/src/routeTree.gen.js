@@ -6,7 +6,6 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as RegisterRouteImport } from './routes/register'
-import { Route as RecommendationsRouteImport } from './routes/recommendations'
 import { Route as MapsRouteImport } from './routes/maps'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as HealthRouteImport } from './routes/health'
@@ -19,11 +18,6 @@ import { Route as DevicesIdRouteImport } from './routes/devices.$id'
 const RegisterRoute = RegisterRouteImport.update({
   id: '/register',
   path: '/register',
-  getParentRoute: () => rootRouteImport,
-})
-const RecommendationsRoute = RecommendationsRouteImport.update({
-  id: '/recommendations',
-  path: '/recommendations',
   getParentRoute: () => rootRouteImport,
 })
 const MapsRoute = MapsRouteImport.update({
@@ -82,7 +76,6 @@ const rootRouteChildren = {
   HealthRoute: HealthRoute,
   LoginRoute: LoginRoute,
   MapsRoute: MapsRoute,
-  RecommendationsRoute: RecommendationsRoute,
   RegisterRoute: RegisterRoute,
 }
 export const routeTree = rootRouteImport._addFileChildren(rootRouteChildren)
