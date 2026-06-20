@@ -1,4 +1,4 @@
-package com.zara.hack.analyze;
+package com.zara.hack.analyze.controller.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;

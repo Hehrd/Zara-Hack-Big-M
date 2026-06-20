@@ -1,5 +1,8 @@
-package com.zara.hack.analyze;
+package com.zara.hack.analyze.service;
 
+import com.zara.hack.analyze.controller.dto.ResAnalysisDTO;
+import com.zara.hack.analyze.persistence.entity.AnalysisEntity;
+import com.zara.hack.analyze.persistence.repository.AnalysisRepository;
 import com.zara.hack.auth.entity.AppUser;
 import com.zara.hack.auth.repository.AppUserRepository;
 import com.zara.hack.common.exception.AnalysisNotFoundException;

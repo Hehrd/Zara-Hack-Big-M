@@ -2,7 +2,7 @@ package com.zara.hack.location.client;
 
 import tools.jackson.databind.JsonNode;
 import com.zara.hack.location.config.LocationProperties;
-import com.zara.hack.location.dto.LsoaScore;
+import com.zara.hack.location.controller.dto.LsoaScore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;

@@ -1,5 +1,8 @@
-package com.zara.hack.analyze;
+package com.zara.hack.analyze.controller;
 
+import com.zara.hack.analyze.service.AnalysisService;
+import com.zara.hack.analyze.controller.dto.ReqAnalysisDTO;
+import com.zara.hack.analyze.controller.dto.ResAnalysisDTO;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;

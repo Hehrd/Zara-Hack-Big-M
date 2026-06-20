@@ -1,6 +1,6 @@
 package com.zara.hack.location.service;
 
-import com.zara.hack.location.dto.DatasetCategory;
+import com.zara.hack.location.controller.dto.DatasetCategory;
 
 import java.util.List;
 

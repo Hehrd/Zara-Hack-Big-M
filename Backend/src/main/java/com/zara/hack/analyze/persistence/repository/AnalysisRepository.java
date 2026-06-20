@@ -1,5 +1,6 @@
-package com.zara.hack.analyze;
+package com.zara.hack.analyze.persistence.repository;
 
+import com.zara.hack.analyze.persistence.entity.AnalysisEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;

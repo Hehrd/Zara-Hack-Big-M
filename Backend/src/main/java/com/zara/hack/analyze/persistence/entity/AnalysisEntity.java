@@ -1,4 +1,4 @@
-package com.zara.hack.analyze;
+package com.zara.hack.analyze.persistence.entity;
 
 import com.zara.hack.auth.entity.AppUser;
 import jakarta.persistence.CollectionTable;

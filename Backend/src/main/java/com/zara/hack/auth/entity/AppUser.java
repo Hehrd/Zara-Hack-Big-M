@@ -13,7 +13,7 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
 
-import com.zara.hack.analyze.AnalysisEntity;
+import com.zara.hack.analyze.persistence.entity.AnalysisEntity;
 
 import java.time.Instant;
 import java.util.ArrayList;

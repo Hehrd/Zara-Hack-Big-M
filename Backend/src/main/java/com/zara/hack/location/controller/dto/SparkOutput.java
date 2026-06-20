@@ -1,4 +1,4 @@
-package com.zara.hack.location.dto;
+package com.zara.hack.location.controller.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import tools.jackson.databind.PropertyNamingStrategies;

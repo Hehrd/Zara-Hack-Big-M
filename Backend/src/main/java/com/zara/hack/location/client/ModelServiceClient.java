@@ -1,8 +1,8 @@
 package com.zara.hack.location.client;
 
 import com.zara.hack.location.config.LocationProperties;
-import com.zara.hack.location.dto.DatasetCategory;
-import com.zara.hack.location.dto.ModelAnalysisResponse;
+import com.zara.hack.location.controller.dto.DatasetCategory;
+import com.zara.hack.location.controller.dto.ModelAnalysisResponse;
 import com.zara.hack.common.exception.CustomException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;

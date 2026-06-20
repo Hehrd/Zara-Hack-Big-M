@@ -1,4 +1,4 @@
-package com.zara.hack.analyze;
+package com.zara.hack.analyze.controller.dto;
 
 import lombok.*;
 
