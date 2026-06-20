@@ -22,6 +22,13 @@ function pointInPolygon(point, polygon) {
   return inside
 }
 
+// Closed GeoJSON Polygon ([lng, lat] order) for the backend's region filter.
+function pointsToGeoJsonPolygon(points) {
+  const ring = points.map((p) => [p.lng, p.lat])
+  ring.push([points[0].lng, points[0].lat])
+  return { type: 'Polygon', coordinates: [ring] }
+}
+
 // Diverging score ramp (low → high) over the deck.gl heatmap.
 function scoreColor(t) {
   const clamped = Math.max(0, Math.min(1, t))
@@ -271,13 +278,13 @@ export function MapsPage() {
     setSelected(null)
     setMinimumScore(null)
     setSubmittedAreaPoints(areaMode === 'custom' ? customPoints : [])
-    const area = areaMode === 'custom'
-      ? { type: 'polygon', label: 'Custom map area', points: customPoints }
-      : { type: 'city', label: trimmedCity }
+    const region = areaMode === 'custom' && customPoints.length >= 3
+      ? pointsToGeoJsonPolygon(customPoints)
+      : undefined
     const resultCount = Math.max(1, Math.min(20, Number(requestedResultCount) || 1))
     setRequestedResultCount(resultCount)
     setSubmittedResultCount(resultCount)
-    recommend.mutate({ city: trimmedCity, area, businessDescription: trimmedDescription, requestedResultCount: resultCount })
+    recommend.mutate({ city: trimmedCity, region, businessDescription: trimmedDescription, requestedResultCount: resultCount })
     if (areaMode === 'custom') clearCustomArea()
   }
 
