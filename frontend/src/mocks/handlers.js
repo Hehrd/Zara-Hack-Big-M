@@ -24,12 +24,15 @@ function pointInPolygon(point, polygon) {
   return inside
 }
 
-function recommendationsForArea(area, requestedCount = 3) {
-  const hasPolygon = area?.type === 'polygon' && area.points?.length >= 3
-  const heatmap = hasPolygon
+function recommendationsForRegion(region, requestedCount = 3) {
+  // GeoJSON Polygon ([lng, lat] rings) -> {lat, lng} ring for point-in-polygon.
+  const ring = region?.type === 'Polygon' && region.coordinates?.[0]?.length >= 4
+    ? region.coordinates[0].map(([lng, lat]) => ({ lat, lng }))
+    : null
+  const heatmap = ring
     ? locationRecommendations.heatmap_layer.filter((location) => location.centroid && pointInPolygon(
       { lat: location.centroid.latitude, lng: location.centroid.longitude },
-      area.points,
+      ring,
     ))
     : locationRecommendations.heatmap_layer
   return {
@@ -45,7 +48,7 @@ export const handlers = [
   http.get('*/alerts', () => HttpResponse.json(alerts)),
   http.post('*/api/location-recommendations', async ({ request }) => {
     const body = await request.json()
-    const requestedCount = Number(new URL(request.url).searchParams.get('requested_result_count')) || 3
-    return HttpResponse.json(recommendationsForArea(body.area, Math.max(1, Math.min(20, requestedCount))))
+    const requestedCount = Number(new URL(request.url).searchParams.get('count')) || 3
+    return HttpResponse.json(recommendationsForRegion(body.region, Math.max(1, Math.min(20, requestedCount))))
   }),
 ]

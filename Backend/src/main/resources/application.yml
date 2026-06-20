@@ -35,9 +35,9 @@ app:
   location:
     model-service-url: ${APP_LOCATION_MODEL_SERVICE_URL:http://localhost:8000}
     google-maps-api-key: ${APP_LOCATION_GOOGLE_MAPS_KEY:}
-    grok-api-key: ${APP_LOCATION_GROK_API_KEY:}
-    grok-api-url: ${APP_LOCATION_GROK_API_URL:https://api.x.ai/v1/chat/completions}
-    grok-model: ${APP_LOCATION_GROK_MODEL:grok-2-latest}
+    openai-api-key: ${APP_LOCATION_OPENAI_KEY:}
+    openai-api-url: ${APP_LOCATION_OPENAI_URL:https://proxy.openkbs.com/v1/openai/chat/completions}
+    openai-model: ${APP_LOCATION_OPENAI_MODEL:gpt-5.4-mini}
     spark-submit-path: ${APP_LOCATION_SPARK_SUBMIT_PATH:/home/user/project/.venv/lib/python3.11/site-packages/pyspark/bin/spark-submit}
     spark-job-path: ${APP_LOCATION_SPARK_JOB_PATH:/home/user/project/pipeline/combine_job.py}
     precomputed-layers-path: ${APP_LOCATION_PRECOMPUTED_LAYERS_PATH:/home/user/project/data/precomputed_layers.json}

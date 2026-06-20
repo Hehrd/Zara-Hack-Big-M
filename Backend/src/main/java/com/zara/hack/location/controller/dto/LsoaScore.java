@@ -1,4 +1,4 @@
-package com.zara.hack.location.dto;
+package com.zara.hack.location.controller.dto;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.PropertyNamingStrategies;

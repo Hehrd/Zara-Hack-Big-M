@@ -1,5 +1,6 @@
-package com.zara.hack.location.dto;
+package com.zara.hack.location.controller.dto;
 
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.PropertyNamingStrategies;
 import tools.jackson.databind.annotation.JsonNaming;
 
@@ -11,6 +12,7 @@ public record SparkScoringInput(
         String city,
         List<String> selectedCategories,
         List<LayerWeight> layerWeights,
-        List<GoogleMapsPoint> googleMapsPoints
+        List<GoogleMapsPoint> googleMapsPoints,
+        JsonNode region
 ) {
 }
