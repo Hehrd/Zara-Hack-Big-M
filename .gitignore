@@ -1,0 +1,13 @@
+
+# Local datasets (large, not version controlled)
+data/
+
+# Python virtualenv (large, not version controlled)
+.venv/
+
+# Python caches
+__pycache__/
+*.pyc
+
+# Secrets / local env (Google Maps + xAI keys live here)
+frontend/.env

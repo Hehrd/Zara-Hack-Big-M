@@ -32,3 +32,17 @@ app:
     secret: ${APP_AUTH_SECRET}
     access-token-ttl: ${APP_AUTH_ACCESS_TOKEN_TTL:PT15M}
     refresh-token-ttl: ${APP_AUTH_REFRESH_TOKEN_TTL:P30D}
+  location:
+    model-service-url: ${APP_LOCATION_MODEL_SERVICE_URL:http://localhost:8000}
+    google-maps-api-key: ${APP_LOCATION_GOOGLE_MAPS_KEY:}
+    grok-api-key: ${APP_LOCATION_GROK_API_KEY:}
+    grok-api-url: ${APP_LOCATION_GROK_API_URL:https://api.x.ai/v1/chat/completions}
+    grok-model: ${APP_LOCATION_GROK_MODEL:grok-2-latest}
+    spark-submit-path: ${APP_LOCATION_SPARK_SUBMIT_PATH:/home/user/project/.venv/lib/python3.11/site-packages/pyspark/bin/spark-submit}
+    spark-job-path: ${APP_LOCATION_SPARK_JOB_PATH:/home/user/project/pipeline/combine_job.py}
+    precomputed-layers-path: ${APP_LOCATION_PRECOMPUTED_LAYERS_PATH:/home/user/project/data/precomputed_layers.json}
+    java-home: ${APP_LOCATION_JAVA_HOME:/opt/jdk25}
+    spark-home: ${APP_LOCATION_SPARK_HOME:/home/user/project/.venv/lib/python3.11/site-packages/pyspark}
+    python-path: ${APP_LOCATION_PYTHON_PATH:/home/user/project/.venv/bin/python}
+    run-dir: ${APP_LOCATION_RUN_DIR:/home/user/project/data/runs}
+    requested-result-count: ${APP_LOCATION_RESULT_COUNT:3}
