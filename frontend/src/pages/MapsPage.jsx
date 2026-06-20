@@ -1,12 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
+import { getRouteApi } from '@tanstack/react-router'
 import { GoogleMapsOverlay } from '@deck.gl/google-maps'
 import { GeoJsonLayer } from '@deck.gl/layers'
-import { Building2, Compass, Eraser, Flag, LoaderCircle, MapPin, Rotate3D, Sparkles, Trophy, TrendingDown, TrendingUp } from 'lucide-react'
+import { Bookmark, BookmarkCheck, Building2, Compass, Eraser, Flag, LoaderCircle, MapPin, Rotate3D, Sparkles, Trophy, TrendingDown, TrendingUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { loadGoogleMaps } from '@/lib/googleMaps'
 import { createLocationRecommendations } from '@/api/recommendations'
+import { useAnalysis } from '@/hooks/useAnalyses'
+import { useSaveRegion } from '@/hooks/useSavedRegions'
+
+const routeApi = getRouteApi('/maps')
 
 const LONDON_CENTER = { lat: 51.5074, lng: -0.1278 }
 
@@ -151,8 +156,14 @@ export function MapsPage() {
   const [requestedResultCount, setRequestedResultCount] = useState(3)
   const [submittedResultCount, setSubmittedResultCount] = useState(3)
 
+  const { analysis: analysisParam } = routeApi.useSearch()
+  const storedAnalysis = useAnalysis(analysisParam)
+  const saveRegion = useSaveRegion()
+  const [savedCodes, setSavedCodes] = useState(() => new Set())
+
   const recommend = useMutation({ mutationFn: createLocationRecommendations })
-  const rawResult = recommend.data
+  const rawResult = recommend.data ?? storedAnalysis.data?.result ?? undefined
+  const analysisId = recommend.data?.analysis_id ?? storedAnalysis.data?.id ?? null
   const result = useMemo(() => {
     if (!rawResult || submittedAreaPoints.length < 3) return rawResult
     const contains = (area) => area.centroid && pointInPolygon(
@@ -352,6 +363,7 @@ export function MapsPage() {
   function clearMap() {
     recommend.reset()
     setSelected(null)
+    setSavedCodes(new Set())
     setMinimumScore(null)
     setSubmittedAreaPoints([])
     clearCustomArea()
@@ -367,6 +379,14 @@ export function MapsPage() {
 
   const explanationFor = (code) => result?.explanations?.find((e) => e.lsoa_code === code)
   const selectedExplanation = selected ? explanationFor(selected.lsoaCode) : null
+
+  function handleSaveRegion(region) {
+    if (!analysisId || !region) return
+    saveRegion.mutate(
+      { analysisId, lsoaCode: region.lsoaCode },
+      { onSuccess: () => setSavedCodes((prev) => new Set(prev).add(region.lsoaCode)) },
+    )
+  }
 
   return (
     <div className="relative h-[calc(100vh-4rem)] min-h-[680px] overflow-hidden lg:h-screen">
@@ -423,7 +443,7 @@ export function MapsPage() {
 
         {!result && !recommend.isPending && <div className="mt-6 rounded-2xl bg-[#f3f6f1] p-4"><div className="flex items-center gap-2 text-sm font-medium"><Sparkles className="size-4 text-emerald-700" /> What happens next</div><p className="mt-2 text-xs leading-5 text-muted-foreground">The backend scores every area, returns a ranked surface, and Locus colors the map. Click any area to inspect its score.</p></div>}
 
-        {result && <ResultPanel result={result} selected={selected} selectedExplanation={selectedExplanation} explanationFor={explanationFor} onLocationSelect={showRankedLocation} />}
+        {result && <ResultPanel result={result} selected={selected} selectedExplanation={selectedExplanation} explanationFor={explanationFor} onLocationSelect={showRankedLocation} canSave={analysisId != null} onSaveRegion={handleSaveRegion} savedCodes={savedCodes} savingCode={saveRegion.isPending ? saveRegion.variables?.lsoaCode : null} />}
       </aside>
 
       {result && (
@@ -447,7 +467,7 @@ export function MapsPage() {
   )
 }
 
-function ResultPanel({ result, selected, selectedExplanation, explanationFor, onLocationSelect }) {
+function ResultPanel({ result, selected, selectedExplanation, explanationFor, onLocationSelect, canSave, onSaveRegion, savedCodes, savingCode }) {
   return (
     <div className="mt-6 space-y-5 border-t pt-5">
       <div>
@@ -466,6 +486,15 @@ function ResultPanel({ result, selected, selectedExplanation, explanationFor, on
         <div className="rounded-2xl border bg-white p-4">
           <div className="flex items-center justify-between gap-2"><div><p className="text-sm font-semibold">{selected.lsoaName}</p><p className="text-[11px] text-muted-foreground">{selected.lsoaCode}</p></div><span className="flex items-center gap-1 rounded-full bg-slate-900 px-2.5 py-1 text-[10px] font-semibold text-white"><Flag className="size-3" /> {Number(selected.score).toFixed(3)}</span></div>
           {selectedExplanation && <p className="mt-3 border-t pt-3 text-[11px] leading-5 text-slate-700">{selectedExplanation.explanation}</p>}
+          {canSave && (() => {
+            const isSaved = savedCodes?.has(selected.lsoaCode)
+            const isSaving = savingCode === selected.lsoaCode
+            return (
+              <Button type="button" size="sm" variant={isSaved ? 'outline' : 'default'} className="mt-3 w-full" disabled={isSaved || isSaving} onClick={() => onSaveRegion(selected)}>
+                {isSaved ? <><BookmarkCheck className="size-4" /> Saved</> : isSaving ? <><LoaderCircle className="size-4 animate-spin" /> Saving…</> : <><Bookmark className="size-4" /> Save region</>}
+              </Button>
+            )
+          })()}
         </div>
       )}
 

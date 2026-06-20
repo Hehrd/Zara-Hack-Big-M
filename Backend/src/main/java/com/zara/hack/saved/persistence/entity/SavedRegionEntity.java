@@ -1,5 +1,6 @@
-package com.zara.hack.analyze.persistence.entity;
+package com.zara.hack.saved.persistence.entity;
 
+import com.zara.hack.analyze.persistence.entity.AnalysisEntity;
 import com.zara.hack.auth.entity.AppUser;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
@@ -11,7 +12,6 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
-import jakarta.persistence.OrderColumn;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
@@ -23,10 +23,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "analyses")
+@Table(name = "saved_regions")
 @Setter
 @Getter
-public class AnalysisEntity {
+public class SavedRegionEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -36,11 +36,21 @@ public class AnalysisEntity {
     @JoinColumn(name = "user_id", nullable = false)
     private AppUser user;
 
-    @ElementCollection
-    @CollectionTable(name = "analysis_items", joinColumns = @JoinColumn(name = "analysis_id"))
-    @OrderColumn(name = "item_order")
-    @Column(name = "content", nullable = false, columnDefinition = "text")
-    private List<String> analysis = new ArrayList<>();
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "analysis_id", nullable = false)
+    private AnalysisEntity analysis;
+
+    @Column(nullable = false)
+    private String lsoaCode;
+
+    private String lsoaName;
+
+    @Column(nullable = false)
+    private double finalScore;
+
+    private Double centroidLat;
+
+    private Double centroidLng;
 
     @Column(columnDefinition = "text")
     private String city;
@@ -48,13 +58,15 @@ public class AnalysisEntity {
     @Column(columnDefinition = "text")
     private String businessDescription;
 
-    @Column(columnDefinition = "text")
-    private String region;
-
     private Integer requestedResultCount;
 
     @Column(columnDefinition = "text")
-    private String result;
+    private String notes;
+
+    @ElementCollection
+    @CollectionTable(name = "saved_region_tags", joinColumns = @JoinColumn(name = "saved_region_id"))
+    @Column(name = "tag")
+    private List<String> tags = new ArrayList<>();
 
     @Column(nullable = false, updatable = false)
     private Instant createdAt;

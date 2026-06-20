@@ -1,6 +1,8 @@
 package com.zara.hack.analyze.controller;
 
 import com.zara.hack.analyze.service.AnalysisService;
+import com.zara.hack.analyze.controller.dto.AnalysisDetailDTO;
+import com.zara.hack.analyze.controller.dto.AnalysisSummaryDTO;
 import com.zara.hack.analyze.controller.dto.ReqAnalysisDTO;
 import com.zara.hack.analyze.controller.dto.ResAnalysisDTO;
 import jakarta.validation.Valid;
@@ -37,8 +39,13 @@ public class AnalysisController {
     }
 
     @GetMapping
-    public List<ResAnalysisDTO> getAnalyses(@AuthenticationPrincipal Jwt jwt) {
-        return analysisService.getAnalyses(userId(jwt));
+    public List<AnalysisSummaryDTO> getAnalyses(@AuthenticationPrincipal Jwt jwt) {
+        return analysisService.getAnalysisSummaries(userId(jwt));
+    }
+
+    @GetMapping("/{id}")
+    public AnalysisDetailDTO getAnalysis(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id) {
+        return analysisService.getAnalysisDetail(userId(jwt), id);
     }
 
     @PutMapping("/{id}")

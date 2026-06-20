@@ -1,5 +1,6 @@
 package com.zara.hack.location.service;
 
+import com.zara.hack.analyze.service.AnalysisService;
 import com.zara.hack.common.exception.CustomException;
 import com.zara.hack.location.client.GoogleMapsClient;
 import com.zara.hack.location.client.ModelServiceClient;
@@ -17,6 +18,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -35,26 +38,34 @@ public class LocationRecommendationService {
     private final OpenAiExplanationClient openAiExplanationClient;
     private final TemplateExplanationFallback templateFallback;
     private final LocationProperties properties;
+    private final AnalysisService analysisService;
+    private final JsonMapper jsonMapper = new JsonMapper();
 
     public LocationRecommendationService(ModelServiceClient modelServiceClient,
                                          GoogleMapsClient googleMapsClient,
                                          SparkScoringRunner sparkScoringRunner,
                                          OpenAiExplanationClient openAiExplanationClient,
                                          TemplateExplanationFallback templateFallback,
-                                         LocationProperties properties) {
+                                         LocationProperties properties,
+                                         AnalysisService analysisService) {
         this.modelServiceClient = modelServiceClient;
         this.googleMapsClient = googleMapsClient;
         this.sparkScoringRunner = sparkScoringRunner;
         this.openAiExplanationClient = openAiExplanationClient;
         this.templateFallback = templateFallback;
         this.properties = properties;
+        this.analysisService = analysisService;
     }
 
     public CombinedLocationResponse recommend(BusinessLocationRequest request) {
-        return recommend(request, null);
+        return recommend(request, null, null);
     }
 
     public CombinedLocationResponse recommend(BusinessLocationRequest request, Integer requestedCount) {
+        return recommend(request, requestedCount, null);
+    }
+
+    public CombinedLocationResponse recommend(BusinessLocationRequest request, Integer requestedCount, Long userId) {
         String city = request.city() == null ? "" : request.city().trim();
         if (city.isEmpty()) {
             throw new CustomException(HttpStatus.BAD_REQUEST, "A city is required");
@@ -102,7 +113,8 @@ public class LocationRecommendationService {
         List<LsoaScore> ranked = scores.subList(0, Math.min(n, scores.size()));
         List<LocationExplanation> explanations = explain(ranked, analysis);
 
-        return new CombinedLocationResponse(
+        CombinedLocationResponse response = new CombinedLocationResponse(
+                null,
                 city,
                 analysis.businessNeeds(),
                 analysis.selectedCategories(),
@@ -110,6 +122,19 @@ public class LocationRecommendationService {
                 scores,
                 ranked,
                 explanations);
+
+        if (userId == null) {
+            return response;
+        }
+        JsonNode region = request.region();
+        Long analysisId = analysisService.saveLocationAnalysis(
+                userId,
+                city,
+                request.businessDescription(),
+                region == null || region.isNull() ? null : jsonMapper.writeValueAsString(region),
+                n,
+                jsonMapper.writeValueAsString(response));
+        return response.withAnalysisId(analysisId);
     }
 
     private List<LocationExplanation> explain(List<LsoaScore> ranked, ModelAnalysisResponse analysis) {
