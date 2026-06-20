@@ -1,0 +1,26 @@
+# Maven build output
+target/
+
+# Local environment files
+.env
+.env.local
+.env.*.local
+
+# IDE metadata
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs and temp files
+*.log
+logs/
+tmp/
+temp/
+
+# Backend-local docs/artifacts
+REDIS_CACHE_SETUP.md

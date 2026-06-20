@@ -1,0 +1,39 @@
+spring:
+  application:
+    name: zara-hack-preparation
+  cache:
+    type: redis
+    redis:
+      time-to-live: ${SPRING_CACHE_REDIS_TIME_TO_LIVE:PT10M}
+      cache-null-values: false
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:h2:file:./data/zara-hack-db;AUTO_SERVER=TRUE}
+    driver-class-name: ${SPRING_DATASOURCE_DRIVER_CLASS_NAME:org.h2.Driver}
+    username: ${SPRING_DATASOURCE_USERNAME:sa}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+      password: ${SPRING_DATA_REDIS_PASSWORD:}
+      timeout: ${SPRING_DATA_REDIS_TIMEOUT:2s}
+  jpa:
+    hibernate:
+      ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:update}
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+  h2:
+    console:
+      enabled: ${SPRING_H2_CONSOLE_ENABLED:true}
+
+server:
+  port: ${SERVER_PORT:6969}
+
+app:
+  auth:
+    issuer: ${APP_AUTH_ISSUER:zara-hack-preparation}
+    secret: ${APP_AUTH_SECRET:2b0b9d67693ed2430d03f3605f53aa03e4c9267b8f0dff3c148e4a92ee819f3b}
+    access-token-ttl: ${APP_AUTH_ACCESS_TOKEN_TTL:PT15M}
+    refresh-token-ttl: ${APP_AUTH_REFRESH_TOKEN_TTL:P30D}

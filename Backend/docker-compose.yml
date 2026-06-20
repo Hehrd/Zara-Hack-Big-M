@@ -1,0 +1,77 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: zara-hack-postgres
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:8-alpine
+    container_name: zara-hack-redis
+    restart: unless-stopped
+    command: >
+      sh -c "redis-server
+      --save ''
+      --appendonly no
+      --requirepass \"$${SPRING_DATA_REDIS_PASSWORD}\"
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru"
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"${SPRING_DATA_REDIS_PASSWORD}\" ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "6379:6379"
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: zara-hack-app
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      SERVER_PORT: ${SERVER_PORT:-8080}
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL}
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: ${SPRING_DATASOURCE_DRIVER_CLASS_NAME}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+      SPRING_JPA_HIBERNATE_DDL_AUTO: ${SPRING_JPA_HIBERNATE_DDL_AUTO:-update}
+      SPRING_H2_CONSOLE_ENABLED: ${SPRING_H2_CONSOLE_ENABLED:-false}
+      SPRING_CACHE_REDIS_TIME_TO_LIVE: ${SPRING_CACHE_REDIS_TIME_TO_LIVE:-PT10M}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD: ${SPRING_DATA_REDIS_PASSWORD}
+      SPRING_DATA_REDIS_TIMEOUT: ${SPRING_DATA_REDIS_TIMEOUT:-2s}
+      APP_AUTH_SECRET: ${APP_AUTH_SECRET}
+      APP_AUTH_ISSUER: ${APP_AUTH_ISSUER:-zara-hack-preparation}
+      APP_AUTH_ACCESS_TOKEN_TTL: ${APP_AUTH_ACCESS_TOKEN_TTL:-PT15M}
+      APP_AUTH_REFRESH_TOKEN_TTL: ${APP_AUTH_REFRESH_TOKEN_TTL:-P30D}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "${SERVER_PORT:-6969}:${SERVER_PORT:-6969}"
+
+volumes:
+  postgres-data:
