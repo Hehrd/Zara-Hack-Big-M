@@ -1,0 +1,537 @@
+project:
+  name: small_business_location_density_map
+  purpose: >
+    Hackathon application that recommends promising small-business locations in
+    London by matching a business description to demographic and location data,
+    producing weighted LSOA-level heatmaps, and explaining the top results.
+
+shared_contracts:
+  business_location_request:
+    owner: Spring Boot backend
+    description: Request submitted by the React frontend.
+    fields:
+      city:
+        type: string
+        allowed_values:
+          - London
+      business_description:
+        type: string
+      requested_result_count:
+        type: integer
+        value: 3
+
+  business_needs:
+    owner: FastAPI model service
+    description: Structured needs extracted from the user business description.
+    fields:
+      business_type:
+        type: string
+      needs:
+        type: array
+        items:
+          type: string
+        examples:
+          - students
+          - pedestrians
+          - residents
+          - competitors
+
+  dataset_category:
+    owner: FastAPI model service
+    description: Dataset category that can be matched against extracted business needs.
+    fields:
+      category_id:
+        type: string
+      display_name:
+        type: string
+      source:
+        type: string
+      polarity:
+        type: string
+        allowed_values:
+          - positive
+          - negative
+          - context
+
+  supported_dataset_categories:
+    owner: Spring Boot backend
+    categories:
+      - category_id: age
+        display_name: Age
+        source: Nomis Census 2021 bulk data
+        polarity: context
+      - category_id: population_density
+        display_name: Population density
+        source: Nomis Census 2021 bulk data
+        polarity: positive
+      - category_id: household_deprivation
+        display_name: Household deprivation
+        source: Nomis Census 2021 bulk data
+        polarity: context
+      - category_id: economic_activity
+        display_name: Economic activity
+        source: Nomis Census 2021 bulk data
+        polarity: context
+      - category_id: occupation
+        display_name: Occupation
+        source: Nomis Census 2021 bulk data
+        polarity: context
+      - category_id: highest_qualification
+        display_name: Highest qualification
+        source: Nomis Census 2021 bulk data
+        polarity: context
+      - category_id: tenure
+        display_name: Tenure
+        source: Nomis Census 2021 bulk data
+        polarity: context
+      - category_id: car_van_availability
+        display_name: Car/van availability
+        source: Nomis Census 2021 bulk data
+        polarity: context
+      - category_id: household_composition
+        display_name: Household composition
+        source: Nomis Census 2021 bulk data
+        polarity: context
+      - category_id: competitors
+        display_name: Competitors
+        source: Google Maps API
+        polarity: negative
+      - category_id: relevant_locations
+        display_name: Relevant nearby locations
+        source: Google Maps API
+        polarity: positive
+
+  layer_weight:
+    owner: FastAPI model service
+    description: Weight assigned to one selected dataset category for the business.
+    fields:
+      category_id:
+        type: string
+      weight:
+        type: number
+        notes: Positive values increase the score; negative values reduce it.
+      reason:
+        type: string
+
+  spark_scoring_input:
+    owner: Spring Boot backend
+    description: JSON file written by Spring Boot and passed to Spark through spark-submit.
+    fields:
+      run_id:
+        type: string
+      city:
+        type: string
+        value: London
+      selected_categories:
+        type: array
+        items:
+          type: string
+      layer_weights:
+        type: array
+        items:
+          contract: layer_weight
+      google_maps_points:
+        type: array
+        items:
+          fields:
+            category_id:
+              type: string
+            name:
+              type: string
+            latitude:
+              type: number
+            longitude:
+              type: number
+            place_id:
+              type: string
+
+  lsoa_score:
+    owner: Spark scoring job
+    description: Scored result for one London LSOA polygon.
+    fields:
+      lsoa_code:
+        type: string
+      lsoa_name:
+        type: string
+      geometry:
+        type: GeoJSON Polygon or MultiPolygon
+      centroid:
+        fields:
+          latitude:
+            type: number
+          longitude:
+            type: number
+      normalized_layer_values:
+        type: object
+        key: category_id
+        value: number
+        value_range: 0 to 1
+      weighted_layer_values:
+        type: object
+        key: category_id
+        value: number
+      final_score:
+        type: number
+
+  combined_location_response:
+    owner: Spring Boot backend
+    description: Response returned by Spring Boot to React.
+    fields:
+      city:
+        type: string
+      business_needs:
+        contract: business_needs
+      selected_categories:
+        type: array
+        items:
+          contract: dataset_category
+      layer_weights:
+        type: array
+        items:
+          contract: layer_weight
+      heatmap_layer:
+        type: array
+        items:
+          contract: lsoa_score
+      ranked_locations:
+        type: array
+        max_items: 3
+        items:
+          contract: lsoa_score
+      explanations:
+        type: array
+        max_items: 3
+        items:
+          fields:
+            lsoa_code:
+              type: string
+            explanation:
+              type: string
+            provider:
+              type: string
+              allowed_values:
+                - xAI Grok
+                - Spring Boot template fallback
+
+storage:
+  local_nomis_census_files:
+    owner: Spark scoring job
+    description: Local Nomis Census 2021 bulk files used for demographic layers.
+    technology_stack:
+      - Local filesystem
+      - CSV files from Nomis Census 2021 bulk downloads
+    frameworks: []
+    libraries: []
+    data_owned:
+      - Raw demographic Census 2021 source data
+    consumed_by:
+      - Spark scoring job
+
+  local_lsoa_boundary_file:
+    owner: Spark scoring job
+    description: >
+      Local ONS Open Geography Portal LSOA 2021 boundary file for England and
+      Wales, filtered to London during Spark processing.
+    technology_stack:
+      - Local filesystem
+      - GeoJSON or Shapefile export from ONS Open Geography Portal
+    frameworks: []
+    libraries: []
+    data_owned:
+      - LSOA polygon geometry
+      - LSOA code to geometry mapping
+    consumed_by:
+      - Spark scoring job
+
+  spark_output_json:
+    owner: Spark scoring job
+    description: JSON output containing scored London LSOA polygons and layer values.
+    technology_stack:
+      - Local filesystem
+      - JSON
+    frameworks: []
+    libraries: []
+    data_owned:
+      - lsoa_score records
+    produced_by:
+      - Spark scoring job
+    consumed_by:
+      - Spring Boot backend
+
+backend_services:
+  spring_boot_backend:
+    description: Main application backend and orchestration layer.
+    responsibility:
+      - Expose HTTP API consumed by React.
+      - Accept business location requests.
+      - Call FastAPI model service for business needs, category matching, and layer weights.
+      - Call Google Maps API for competitor and relevant-location points in London.
+      - Write Spark scoring input JSON.
+      - Trigger Spark scoring job through spark-submit.
+      - Read Spark output JSON.
+      - Call xAI Grok for explanations for the top 3 ranked LSOAs.
+      - Produce template explanations if the xAI Grok call fails.
+      - Return combined location response to React.
+    technology_stack:
+      - Java
+      - Spring Boot
+    frameworks:
+      - Spring Boot
+    libraries: []
+    external_apis:
+      - Google Maps API
+      - xAI Grok API
+    internal_apis_exposed:
+      - method: POST
+        path: /api/location-recommendations
+        request_contract: business_location_request
+        response_contract: combined_location_response
+    dependencies:
+      - FastAPI model service
+      - Spark scoring job
+      - local_lsoa_boundary_file
+      - local_nomis_census_files
+      - spark_output_json
+      - Google Maps API
+      - xAI Grok API
+    communication_relationships:
+      - direction: React frontend -> Spring Boot backend
+        protocol: HTTP
+        data_flow: React posts the city and business description.
+      - direction: Spring Boot backend -> FastAPI model service
+        protocol: HTTP
+        data_flow: Spring Boot sends the business description and supported dataset categories.
+      - direction: Spring Boot backend -> Google Maps API
+        protocol: HTTPS
+        data_flow: Spring Boot retrieves competitor and relevant-location points for London.
+      - direction: Spring Boot backend -> Spark scoring job
+        protocol: spark-submit process invocation with JSON file arguments
+        data_flow: Spring Boot passes the scoring input path and expected output path.
+      - direction: Spring Boot backend -> xAI Grok API
+        protocol: HTTPS
+        data_flow: Spring Boot sends top 3 LSOA scores and layer values for explanation generation.
+    implementation_notes:
+      - Keep Spark transformations out of Spring-managed Java closures.
+      - Treat Spark as an external job invoked through spark-submit.
+      - Store xAI Grok API key in an environment variable.
+      - Use deterministic template fallback for top-3 explanations when xAI Grok fails or is rate-limited.
+
+  fastapi_model_service:
+    description: Model service for business understanding, category matching, and layer weighting.
+    responsibility:
+      - Extract structured business needs from the user description.
+      - Use the custom embedding model to match business needs to supported dataset categories.
+      - Produce layer weights for the matched dataset categories.
+    technology_stack:
+      - Python
+      - FastAPI
+      - Custom embedding model
+    frameworks:
+      - FastAPI
+    libraries:
+      - Custom embedding model library or local model package
+    external_apis: []
+    internal_apis_exposed:
+      - method: POST
+        path: /model/business-analysis
+        request_fields:
+          - business_description
+          - supported_dataset_categories
+        response_fields:
+          - business_needs
+          - selected_categories
+          - layer_weights
+    dependencies:
+      - supported_dataset_categories
+      - Custom embedding model
+    communication_relationships:
+      - direction: Spring Boot backend -> FastAPI model service
+        protocol: HTTP
+        data_flow: Spring Boot requests business needs, selected categories, and layer weights.
+    implementation_notes:
+      - The embedding model matches extracted business needs to dataset categories, not directly to geographic records.
+      - Competitors should receive negative weights when they represent saturation risk.
+
+frontend_clients:
+  react_frontend:
+    description: User-facing map interface for business location recommendations.
+    responsibility:
+      - Let the user select the city.
+      - Let the user describe the business.
+      - Display LSOA-level heatmap results.
+      - Display top 3 ranked locations.
+      - Display explanation text for the top 3 ranked locations.
+    technology_stack:
+      - JavaScript or TypeScript
+      - React
+    frameworks:
+      - React
+    libraries:
+      - Google Maps JavaScript API
+      - deck.gl
+    external_apis:
+      - Google Maps JavaScript API
+    internal_apis_consumed:
+      - method: POST
+        path: /api/location-recommendations
+        request_contract: business_location_request
+        response_contract: combined_location_response
+    dependencies:
+      - Spring Boot backend
+      - Google Maps JavaScript API
+      - deck.gl
+    communication_relationships:
+      - direction: React frontend -> Spring Boot backend
+        protocol: HTTP
+        data_flow: React sends the selected city and business description.
+    implementation_notes:
+      - London is the only city option for the hackathon version.
+      - Render the heatmap from LSOA polygons using deck.gl over Google Maps.
+      - Use final_score to control heatmap intensity/color.
+
+workers_pipelines_integrations:
+  spark_scoring_job:
+    description: Spark job that creates normalized LSOA heatmap layers and computes final weighted scores.
+    responsibility:
+      - Read local Nomis Census 2021 demographic files.
+      - Read local ONS LSOA boundary geometry.
+      - Filter records to London LSOAs.
+      - Read Spring Boot scoring input JSON.
+      - Convert each selected dataset category into an LSOA-level heatmap layer.
+      - Normalize each layer by dividing each LSOA value by the highest value in that layer.
+      - Multiply normalized layer values by category weights.
+      - Add weighted layer values per LSOA to produce final_score.
+      - Write scored LSOA JSON for Spring Boot.
+    technology_stack:
+      - Apache Spark
+      - Local filesystem
+      - JSON
+      - CSV
+      - GeoJSON or Shapefile
+    frameworks:
+      - Apache Spark
+    libraries: []
+    external_apis: []
+    internal_apis_exposed: []
+    dependencies:
+      - local_nomis_census_files
+      - local_lsoa_boundary_file
+      - spark_scoring_input
+    communication_relationships:
+      - direction: Spring Boot backend -> Spark scoring job
+        protocol: spark-submit process invocation with JSON file arguments
+        data_flow: Spring Boot starts the job and supplies input/output file paths.
+      - direction: Spark scoring job -> Spring Boot backend
+        protocol: Local JSON file output
+        data_flow: Spring Boot reads the completed scored LSOA JSON.
+    implementation_notes:
+      - LSOA polygons are the heatmap cells.
+      - Point data from Google Maps API must be aggregated to LSOA polygons before normalization.
+      - Each layer is normalized independently before weighting.
+      - Final score is the sum of weighted normalized layer values.
+
+  google_maps_location_integration:
+    description: Integration for competitors and other relevant business-location points.
+    responsibility:
+      - Retrieve competitor locations related to the business description.
+      - Retrieve other relevant places such as schools or nearby amenities when selected by the model.
+      - Return latitude/longitude points for aggregation into LSOA layers.
+    technology_stack:
+      - Google Maps API
+      - HTTPS
+    frameworks: []
+    libraries: []
+    external_apis:
+      - Google Maps API
+    internal_apis_exposed: []
+    dependencies:
+      - Spring Boot backend
+    communication_relationships:
+      - direction: Spring Boot backend -> Google Maps API
+        protocol: HTTPS
+        data_flow: Spring Boot requests competitor and relevant-location points for London.
+    implementation_notes:
+      - Google Maps API point results are not the map renderer; React uses Google Maps JavaScript API and deck.gl for display.
+
+  xai_grok_explanation_integration:
+    description: LLM integration used to explain the top 3 ranked LSOAs.
+    responsibility:
+      - Generate human-readable explanations from top LSOA layer values and final scores.
+      - Return explanation text to Spring Boot.
+    technology_stack:
+      - xAI Grok API
+      - HTTPS
+    frameworks: []
+    libraries: []
+    external_apis:
+      - xAI Grok API
+    internal_apis_exposed: []
+    dependencies:
+      - Spring Boot backend
+    communication_relationships:
+      - direction: Spring Boot backend -> xAI Grok API
+        protocol: HTTPS
+        data_flow: Spring Boot sends top 3 LSOA scoring details and receives explanations.
+    implementation_notes:
+      - Generate explanations only for the top 3 ranked LSOAs.
+      - Spring Boot must provide deterministic template fallback explanations if Grok fails.
+      - Do not assume unlimited or free API calls.
+
+infrastructure_deployment_observability_security:
+  hackathon_deployment:
+    description: Deployment is handled by the hackathon environment.
+    technology_stack:
+      - Hackathon-provided deployment
+    frameworks: []
+    libraries: []
+    implementation_notes:
+      - Application must run with local files available to Spark.
+      - Spring Boot must be able to execute spark-submit in the deployed environment.
+      - Required secrets are Google Maps API key and xAI Grok API key.
+
+architecture_warnings:
+  - warning: Spring Boot triggering spark-submit can be slow for interactive requests.
+    affected_components:
+      - spring_boot_backend
+      - spark_scoring_job
+  - warning: LSOA polygons are coarse compared with point-level site selection.
+    affected_components:
+      - spark_scoring_job
+      - react_frontend
+  - warning: Google Maps API may not return complete competitor coverage and may be quota-limited.
+    affected_components:
+      - google_maps_location_integration
+  - warning: xAI Grok API availability, cost, and rate limits can affect explanation generation.
+    affected_components:
+      - xai_grok_explanation_integration
+  - warning: Category weights from the model may be hard to validate without test examples.
+    affected_components:
+      - fastapi_model_service
+
+recommended_improvements:
+  - for_warning: Spring Boot triggering spark-submit can be slow for interactive requests.
+    recommendation: Precompute static demographic layers and run Spark only for weighted combination during the demo.
+  - for_warning: LSOA polygons are coarse compared with point-level site selection.
+    recommendation: Present results as area recommendations rather than exact storefront recommendations.
+  - for_warning: Google Maps API may not return complete competitor coverage and may be quota-limited.
+    recommendation: Cache Google Maps API responses for repeated business descriptions during the hackathon.
+  - for_warning: xAI Grok API availability, cost, and rate limits can affect explanation generation.
+    recommendation: Keep the Spring Boot template fallback enabled for every top-3 explanation.
+  - for_warning: Category weights from the model may be hard to validate without test examples.
+    recommendation: Create a small set of known business prompts and expected high/low weights for sanity testing.
+
+implementation_order:
+  - Define shared JSON contracts for request, model response, Spark input, Spark output, and combined frontend response.
+  - Download and store local Nomis Census 2021 LSOA files.
+  - Download and store local ONS LSOA 2021 boundary geometry.
+  - Implement Spark job to load Census and LSOA geometry files.
+  - Implement Spark layer normalization and weighted LSOA scoring.
+  - Implement FastAPI model service for business needs, category matching, and layer weights.
+  - Implement Spring Boot endpoint and FastAPI HTTP client.
+  - Implement Spring Boot spark-submit orchestration and Spark output JSON reader.
+  - Implement Spring Boot Google Maps API integration for competitors and relevant locations.
+  - Implement Spring Boot xAI Grok explanation integration and template fallback.
+  - Implement React form for London business description input.
+  - Implement React Google Maps and deck.gl LSOA heatmap rendering.
+  - Implement React top-3 ranked location and explanation display.
+  - Configure hackathon deployment environment, local data paths, spark-submit path, and API keys.

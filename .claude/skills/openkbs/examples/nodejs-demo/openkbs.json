@@ -1,0 +1,15 @@
+{
+  "name": "nodejs-demo",
+  "region": "us-east-1",
+  "spa": "/app/index.html",
+  "postgres": true,
+  "storage": {
+    "cloudfront": "media"
+  },
+  "mqtt": true,
+  "functions": [
+    { "name": "auth", "runtime": "nodejs24.x", "memory": 512, "timeout": 30 },
+    { "name": "posts", "runtime": "nodejs24.x", "memory": 512, "timeout": 30 }
+  ],
+  "site": "./site"
+}
