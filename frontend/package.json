@@ -11,6 +11,9 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
+    "@deck.gl/core": "^9.3.4",
+    "@deck.gl/google-maps": "^9.3.4",
+    "@deck.gl/layers": "^9.3.4",
     "@fontsource-variable/geist": "^5.2.9",
     "@tanstack/react-query": "^5.101.0",
     "@tanstack/react-router": "^1.170.16",

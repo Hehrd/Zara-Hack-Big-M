@@ -1,65 +1,74 @@
-import { Activity, Bell, Gauge, House, Menu, Radio } from 'lucide-react'
-import { Link, Outlet } from '@tanstack/react-router'
+import { BarChart3, Compass, LogOut, Menu, Plus, UserRound, X } from 'lucide-react'
+import { Link, Outlet, useRouterState } from '@tanstack/react-router'
+import { LocusLogo } from '@/components/LocusLogo'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store/appStore'
 
-const links = [
-  { to: '/', label: 'Home', icon: House },
-  { to: '/health', label: 'Health', icon: Activity },
-  { to: '/dashboard', label: 'Dashboard', icon: Gauge },
-  { to: '/devices', label: 'Devices', icon: Radio },
-  { to: '/alerts', label: 'Alerts', icon: Bell },
+const productLinks = [
+  { to: '/dashboard', label: 'Dashboard', icon: BarChart3 },
+  { to: '/maps', label: 'Explore', icon: Compass },
 ]
 
 export function AppShell() {
-  const { modalOpen, setModalOpen, sidebarOpen, toggleSidebar, user } = useAppStore()
-  const navClassName = 'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+  const pathname = useRouterState({ select: (state) => state.location.pathname })
+  const isPublic = pathname === '/' || pathname === '/login' || pathname === '/register'
+
+  return isPublic ? <PublicShell /> : <ProductShell />
+}
+
+function PublicShell() {
+  return (
+    <div className="min-h-screen overflow-hidden">
+      <header className="relative z-20 mx-auto flex h-20 max-w-7xl items-center justify-between px-5 lg:px-8">
+        <LocusLogo />
+        <nav className="flex items-center gap-2">
+          <Button variant="ghost" nativeButton={false} render={<Link to="/login" />}>Log in</Button>
+          <Button nativeButton={false} render={<Link to="/register" />}>Get started</Button>
+        </nav>
+      </header>
+      <main><Outlet /></main>
+    </div>
+  )
+}
+
+function ProductShell() {
+  const { sidebarOpen, toggleSidebar, user } = useAppStore()
+  const linkClass = 'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/8 hover:text-white'
 
   return (
-    <div className="min-h-screen md:grid md:grid-cols-[240px_1fr]">
-      <aside className={cn('border-r bg-card p-4 md:block', sidebarOpen ? 'block' : 'hidden')}>
-        <div className="mb-8 flex items-center gap-2 px-2 text-lg font-semibold">
-          <span className="grid size-8 place-items-center rounded-lg bg-primary text-primary-foreground">Z</span>
-          ZaraHack Starter
+    <div className="min-h-screen bg-[#f6f7f3] lg:grid lg:grid-cols-[232px_1fr]">
+      <aside className={cn('fixed inset-y-0 left-0 z-40 flex w-[232px] flex-col bg-[#14211c] p-4 text-white transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0', sidebarOpen ? 'translate-x-0' : '-translate-x-full')}>
+        <div className="mb-8 flex items-center justify-between px-1">
+          <div className="[&_a]:text-white [&_span:first-child]:bg-emerald-500"><LocusLogo /></div>
+          <Button variant="ghost" size="icon" className="text-white lg:hidden" onClick={toggleSidebar} aria-label="Close navigation"><X /></Button>
         </div>
+        <Button className="mb-6 bg-emerald-500 text-[#102019] hover:bg-emerald-400" nativeButton={false} render={<Link to="/maps" />}>
+          <Plus /> New analysis
+        </Button>
         <nav className="space-y-1">
-          {links.map(({ to, label, icon: Icon }) => (
-            <Link
-              key={to}
-              to={to}
-              activeOptions={{ exact: to === '/' }}
-              onClick={() => sidebarOpen && toggleSidebar()}
-              className={navClassName}
-              activeProps={{ className: cn(navClassName, 'bg-accent text-accent-foreground') }}
-            >
+          {productLinks.map(({ to, label, icon: Icon }) => (
+            <Link key={to} to={to} onClick={() => sidebarOpen && toggleSidebar()} className={linkClass} activeProps={{ className: cn(linkClass, 'bg-white/10 text-white') }}>
               <Icon className="size-4" /> {label}
             </Link>
           ))}
         </nav>
-      </aside>
-      <div className="min-w-0">
-        <header className="flex h-16 items-center justify-between border-b bg-card px-4 md:px-8">
-          <Button variant="outline" size="icon" className="md:hidden" onClick={toggleSidebar} aria-label="Toggle navigation">
-            <Menu />
-          </Button>
-          <div className="ml-auto flex items-center gap-3">
-            <Button variant="outline" size="sm" onClick={() => setModalOpen(true)}>Quick note</Button>
-            <p className="hidden text-sm text-muted-foreground sm:block">{user.name}</p>
+        <div className="mt-auto border-t border-white/10 pt-4">
+          <div className="flex items-center gap-3 rounded-xl px-2 py-2">
+            <span className="grid size-9 place-items-center rounded-full bg-white/10"><UserRound className="size-4" /></span>
+            <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{user.name}</p><p className="text-xs text-slate-400">Owner account</p></div>
+            <LogOut className="size-4 text-slate-500" />
           </div>
+        </div>
+      </aside>
+      {sidebarOpen && <button className="fixed inset-0 z-30 bg-black/35 lg:hidden" aria-label="Close navigation" onClick={toggleSidebar} />}
+      <div className="min-w-0">
+        <header className="flex h-16 items-center border-b bg-white/85 px-4 backdrop-blur lg:hidden">
+          <Button variant="ghost" size="icon" onClick={toggleSidebar} aria-label="Open navigation"><Menu /></Button>
+          <div className="mx-auto"><LocusLogo compact /></div>
+          <span className="size-8" />
         </header>
-        <main className="mx-auto max-w-6xl p-4 md:p-8"><Outlet /></main>
-        <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Hackathon note</DialogTitle>
-              <DialogDescription>This controlled dialog and input demonstrate Zustand-backed UI state.</DialogDescription>
-            </DialogHeader>
-            <Input placeholder="Capture the next idea…" autoFocus />
-          </DialogContent>
-        </Dialog>
+        <main className="min-h-[calc(100vh-4rem)] lg:min-h-screen"><Outlet /></main>
       </div>
     </div>
   )

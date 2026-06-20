@@ -6,6 +6,9 @@ import path from 'node:path'
 
 // https://vite.dev/config/
 export default defineConfig({
+  server: {
+    port: 3000,
+  },
   plugins: [
     tanstackRouter({
       target: 'react',

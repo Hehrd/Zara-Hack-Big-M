@@ -5,6 +5,9 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as RegisterRouteImport } from './routes/register'
+import { Route as MapsRouteImport } from './routes/maps'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as HealthRouteImport } from './routes/health'
 import { Route as DevicesRouteImport } from './routes/devices'
 import { Route as DashboardRouteImport } from './routes/dashboard'
@@ -12,6 +15,21 @@ import { Route as AlertsRouteImport } from './routes/alerts'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DevicesIdRouteImport } from './routes/devices.$id'
 
+const RegisterRoute = RegisterRouteImport.update({
+  id: '/register',
+  path: '/register',
+  getParentRoute: () => rootRouteImport,
+})
+const MapsRoute = MapsRouteImport.update({
+  id: '/maps',
+  path: '/maps',
+  getParentRoute: () => rootRouteImport,
+})
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+})
 const HealthRoute = HealthRouteImport.update({
   id: '/health',
   path: '/health',
@@ -56,5 +74,8 @@ const rootRouteChildren = {
   DashboardRoute: DashboardRoute,
   DevicesRoute: DevicesRouteWithChildren,
   HealthRoute: HealthRoute,
+  LoginRoute: LoginRoute,
+  MapsRoute: MapsRoute,
+  RegisterRoute: RegisterRoute,
 }
 export const routeTree = rootRouteImport._addFileChildren(rootRouteChildren)

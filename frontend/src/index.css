@@ -8,25 +8,25 @@
 :root {
   font-family: "Geist Variable", system-ui, sans-serif;
   color-scheme: light;
-  --radius: 0.75rem;
-  --background: oklch(0.985 0.004 250);
-  --foreground: oklch(0.18 0.025 250);
+  --radius: 0.9rem;
+  --background: oklch(0.975 0.008 120);
+  --foreground: oklch(0.19 0.025 160);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.18 0.025 250);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.18 0.025 250);
-  --primary: oklch(0.54 0.2 257);
+  --primary: oklch(0.5 0.145 158);
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.95 0.018 250);
-  --secondary-foreground: oklch(0.25 0.04 250);
-  --muted: oklch(0.95 0.012 250);
-  --muted-foreground: oklch(0.5 0.03 250);
-  --accent: oklch(0.93 0.035 250);
-  --accent-foreground: oklch(0.25 0.04 250);
+  --secondary: oklch(0.94 0.018 145);
+  --secondary-foreground: oklch(0.25 0.035 155);
+  --muted: oklch(0.94 0.012 130);
+  --muted-foreground: oklch(0.48 0.025 155);
+  --accent: oklch(0.92 0.035 150);
+  --accent-foreground: oklch(0.24 0.045 155);
   --destructive: oklch(0.58 0.23 28);
-  --border: oklch(0.9 0.018 250);
-  --input: oklch(0.9 0.018 250);
-  --ring: oklch(0.54 0.2 257);
+  --border: oklch(0.88 0.018 140);
+  --input: oklch(0.88 0.018 140);
+  --ring: oklch(0.5 0.145 158);
 }
 
 @theme inline {
@@ -59,4 +59,10 @@
   * { @apply border-border outline-ring/50; }
   body { @apply min-h-screen bg-background text-foreground antialiased; }
   button, a { @apply transition-colors; }
+}
+
+@layer utilities {
+  .contour-field {
+    background-image: radial-gradient(ellipse at 50% 50%, transparent 0 13%, color-mix(in oklch, var(--primary) 16%, transparent) 13.3% 13.9%, transparent 14.2% 24%, color-mix(in oklch, var(--primary) 12%, transparent) 24.3% 24.9%, transparent 25.2% 37%, color-mix(in oklch, var(--primary) 10%, transparent) 37.3% 37.9%, transparent 38.2% 52%, color-mix(in oklch, var(--primary) 8%, transparent) 52.3% 52.9%, transparent 53.2%);
+  }
 }

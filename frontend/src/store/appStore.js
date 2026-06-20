@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 
 export const useAppStore = create((set) => ({
-  user: { id: 'demo-user', name: 'Hackathon debel' },
+  user: { id: 'demo-user', name: 'Demo owner' },
   selectedDeviceId: null,
   sidebarOpen: false,
   modalOpen: false,
