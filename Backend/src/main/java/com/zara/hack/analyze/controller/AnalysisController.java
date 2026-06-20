@@ -42,6 +42,7 @@ public class AnalysisController {
     }
 
     @PutMapping("/{id}")
+    @ResponseStatus(HttpStatus.OK)
     public ResAnalysisDTO updateAnalysis(@AuthenticationPrincipal Jwt jwt,
                                          @PathVariable Long id,
                                          @Valid @RequestBody ReqAnalysisDTO request) {
