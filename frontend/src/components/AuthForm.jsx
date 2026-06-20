@@ -9,6 +9,7 @@ import { saveAuthSession } from '@/api/authSession'
 
 export function AuthForm({ mode }) {
   const isRegister = mode === 'register'
+  const mocksEnabled = import.meta.env.DEV && import.meta.env.VITE_ENABLE_MOCKS === 'true'
   const navigate = useNavigate()
   const setUser = useAppStore((state) => state.setUser)
   const [error, setError] = useState('')
@@ -58,8 +59,8 @@ export function AuthForm({ mode }) {
         <p className="mt-3 text-sm leading-6 text-muted-foreground">{isRegister ? 'Set up your free Locus workspace in less than a minute.' : 'Log in to return to your analyses and saved locations.'}</p>
         <form className="mt-8 space-y-4" onSubmit={handleSubmit}>
           <label className="block space-y-1.5 text-sm font-medium">
-            Email
-            <Input name="email" type="email" autoComplete="email" placeholder="you@example.com" />
+            {mocksEnabled && !isRegister ? 'Username' : 'Email'}
+            <Input name="email" type={mocksEnabled && !isRegister ? 'text' : 'email'} autoComplete="username" placeholder={mocksEnabled && !isRegister ? 'frogo' : 'you@example.com'} />
           </label>
           <label className="block space-y-1.5 text-sm font-medium">
             Password
