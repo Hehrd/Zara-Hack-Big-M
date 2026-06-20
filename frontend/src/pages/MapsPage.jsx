@@ -176,6 +176,7 @@ export function MapsPage() {
       : form.get('area')?.trim()
     if (!area) return
     analysis.mutate({ businessType: form.get('businessType')?.trim(), area })
+    if (areaMode === 'custom') clearCustomArea()
   }
 
   function changeAreaMode(mode) {

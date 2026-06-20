@@ -11,6 +11,22 @@ const alerts = [
   { id: 'alert-002', severity: 'low', message: 'Tracker battery below 30%', deviceId: 'device-002' },
 ]
 
+const mockUser = { id: 1, email: 'frogo', password: '123123123' }
+const mockUsers = new Map([[mockUser.email, mockUser]])
+const validRefreshTokens = new Set()
+
+function mockTokenPair() {
+  const refreshToken = `mock-refresh-${crypto.randomUUID()}`
+  validRefreshTokens.add(refreshToken)
+  return {
+    tokenType: 'Bearer',
+    accessToken: `mock-access-${crypto.randomUUID()}`,
+    accessTokenExpiresAt: new Date(Date.now() + 15 * 60_000).toISOString(),
+    refreshToken,
+    refreshTokenExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60_000).toISOString(),
+  }
+}
+
 // Development-only backend stand-in. Production scoring belongs in Spring Boot.
 function buildDemoZones() {
   const positiveLine = [6, 95, 70, 110]
@@ -74,6 +90,41 @@ function buildDemoSurface(zones) {
 }
 
 export const handlers = [
+  http.post('*/api/auth/signup', async ({ request }) => {
+    const { email, password } = await request.json()
+    await delay(300)
+    if (!email || !password || password.length < 8) {
+      return HttpResponse.json({ status: 400, error: 'Bad Request', message: 'Email and a password of at least 8 characters are required.', path: '/api/auth/signup' }, { status: 400 })
+    }
+    const normalizedEmail = email.trim().toLowerCase()
+    if (mockUsers.has(normalizedEmail)) {
+      return HttpResponse.json({ status: 409, error: 'Conflict', message: 'This account is already registered.', path: '/api/auth/signup' }, { status: 409 })
+    }
+    const user = { id: Date.now(), email: normalizedEmail, password }
+    mockUsers.set(normalizedEmail, user)
+    return HttpResponse.json({ id: user.id, email: user.email, createdAt: new Date().toISOString() }, { status: 201 })
+  }),
+  http.post('*/api/auth/login', async ({ request }) => {
+    const { email, password } = await request.json()
+    await delay(300)
+    const user = mockUsers.get(email.trim().toLowerCase())
+    if (!user || password !== user.password) {
+      return HttpResponse.json({ status: 401, error: 'Unauthorized', message: 'Invalid username or password.', path: '/api/auth/login' }, { status: 401 })
+    }
+    return HttpResponse.json(mockTokenPair())
+  }),
+  http.post('*/api/auth/refresh', async ({ request }) => {
+    const { refreshToken } = await request.json()
+    if (!validRefreshTokens.delete(refreshToken)) {
+      return HttpResponse.json({ status: 401, error: 'Unauthorized', message: 'Refresh token is invalid or expired.', path: '/api/auth/refresh' }, { status: 401 })
+    }
+    return HttpResponse.json(mockTokenPair())
+  }),
+  http.post('*/api/auth/logout', async ({ request }) => {
+    const { refreshToken } = await request.json()
+    validRefreshTokens.delete(refreshToken)
+    return new HttpResponse(null, { status: 204 })
+  }),
   http.get('*/health', async () => {
     await delay(250)
     return HttpResponse.json({ status: 'ok' })
