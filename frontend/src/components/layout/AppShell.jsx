@@ -1,4 +1,4 @@
-import { BarChart3, Compass, LogOut, Menu, Plus, Sparkles, UserRound, X } from 'lucide-react'
+import { BarChart3, Compass, LogOut, Menu, Plus, UserRound, X } from 'lucide-react'
 import { Link, Outlet, useRouterState } from '@tanstack/react-router'
 import { LocusLogo } from '@/components/LocusLogo'
 import { Button } from '@/components/ui/button'
@@ -12,7 +12,6 @@ import { useNavigate } from '@tanstack/react-router'
 const productLinks = [
   { to: '/dashboard', label: 'Dashboard', icon: BarChart3 },
   { to: '/maps', label: 'Explore', icon: Compass },
-  { to: '/recommendations', label: 'Recommendations', icon: Sparkles },
 ]
 
 export function AppShell() {
