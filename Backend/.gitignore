@@ -21,6 +21,3 @@ Thumbs.db
 logs/
 tmp/
 temp/
-
-# Backend-local docs/artifacts
-REDIS_CACHE_SETUP.md

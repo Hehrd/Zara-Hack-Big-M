@@ -1,32 +1,20 @@
 spring:
   application:
     name: zara-hack-preparation
-  cache:
-    type: redis
-    redis:
-      time-to-live: ${SPRING_CACHE_REDIS_TIME_TO_LIVE:PT10M}
-      cache-null-values: false
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:h2:file:./data/zara-hack-db;AUTO_SERVER=TRUE}
-    driver-class-name: ${SPRING_DATASOURCE_DRIVER_CLASS_NAME:org.h2.Driver}
-    username: ${SPRING_DATASOURCE_USERNAME:sa}
-    password: ${SPRING_DATASOURCE_PASSWORD:}
-  data:
-    redis:
-      host: ${SPRING_DATA_REDIS_HOST:localhost}
-      port: ${SPRING_DATA_REDIS_PORT:6379}
-      password: ${SPRING_DATA_REDIS_PASSWORD:}
-      timeout: ${SPRING_DATA_REDIS_TIMEOUT:2s}
+    url: ${SUPABASE_DB_URL}
+    username: ${SUPABASE_DB_USER}
+    password: ${SUPABASE_DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
-      ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:update}
+      ddl-auto: update
+    show-sql: true
     open-in-view: false
     properties:
       hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
-  h2:
-    console:
-      enabled: ${SPRING_H2_CONSOLE_ENABLED:true}
 
 server:
   port: ${SERVER_PORT:6969}
