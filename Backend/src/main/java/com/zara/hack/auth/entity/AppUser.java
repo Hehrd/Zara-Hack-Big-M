@@ -7,12 +7,17 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
 
+import com.zara.hack.analyze.persistence.entity.AnalysisEntity;
+
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "users")
@@ -36,6 +41,9 @@ public class AppUser {
 
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
+
+    @OneToMany(mappedBy = "user", cascade = jakarta.persistence.CascadeType.ALL, orphanRemoval = true)
+    private List<AnalysisEntity> analyses = new ArrayList<>();
 
     @PrePersist
     void onCreate() {

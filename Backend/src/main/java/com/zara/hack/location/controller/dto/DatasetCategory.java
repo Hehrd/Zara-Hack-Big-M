@@ -1,14 +1,13 @@
-package com.zara.hack.location.dto;
+package com.zara.hack.location.controller.dto;
 
 import tools.jackson.databind.PropertyNamingStrategies;
 import tools.jackson.databind.annotation.JsonNaming;
 
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public record GoogleMapsPoint(
+public record DatasetCategory(
         String categoryId,
-        String name,
-        double latitude,
-        double longitude,
-        String placeId
+        String displayName,
+        String source,
+        String polarity
 ) {
 }

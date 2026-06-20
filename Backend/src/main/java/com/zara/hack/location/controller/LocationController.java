@@ -1,7 +1,7 @@
 package com.zara.hack.location.controller;
 
-import com.zara.hack.location.dto.BusinessLocationRequest;
-import com.zara.hack.location.dto.CombinedLocationResponse;
+import com.zara.hack.location.controller.dto.BusinessLocationRequest;
+import com.zara.hack.location.controller.dto.CombinedLocationResponse;
 import com.zara.hack.location.service.LocationRecommendationService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.PostMapping;

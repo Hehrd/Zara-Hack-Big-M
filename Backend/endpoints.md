@@ -141,3 +141,110 @@ For protected endpoints, send the access token in the HTTP header:
 ```http
 Authorization: Bearer <jwt>
 ```
+
+## Create an analysis
+
+`POST /api/analyze`
+
+Creates an analysis owned by the authenticated user. Requires an access token.
+
+Request shape:
+
+```json
+{
+  "analysis": [
+    "Strong pedestrian traffic in the target area",
+    "Limited direct competition nearby"
+  ]
+}
+```
+
+- `analysis`: required, non-empty array of non-blank strings
+
+Success - `201 Created`:
+
+```json
+{
+  "id": 1,
+  "analysis": [
+    "Strong pedestrian traffic in the target area",
+    "Limited direct competition nearby"
+  ],
+  "createdAt": "2026-06-20T20:30:00Z",
+  "updatedAt": "2026-06-20T20:30:00Z"
+}
+```
+
+Possible errors: `400 Bad Request`, `401 Unauthorized`.
+
+## List analyses
+
+`GET /api/analyze`
+
+Returns all analyses owned by the authenticated user, ordered from newest to oldest. Requires an access token.
+
+Success - `200 OK`:
+
+```json
+[
+  {
+    "id": 1,
+    "analysis": [
+      "Strong pedestrian traffic in the target area",
+      "Limited direct competition nearby"
+    ],
+    "createdAt": "2026-06-20T20:30:00Z",
+    "updatedAt": "2026-06-20T20:30:00Z"
+  }
+]
+```
+
+Returns an empty array when the user has no analyses.
+
+Possible errors: `401 Unauthorized`.
+
+## Update an analysis
+
+`PUT /api/analyze/{id}`
+
+Replaces the analysis items for an analysis owned by the authenticated user. Requires an access token.
+
+Request shape:
+
+```json
+{
+  "analysis": [
+    "Updated market observation",
+    "Updated competitor observation"
+  ]
+}
+```
+
+- `id`: analysis ID from the URL
+- `analysis`: required, non-empty array of non-blank strings
+
+Success - `200 OK`:
+
+```json
+{
+  "id": 1,
+  "analysis": [
+    "Updated market observation",
+    "Updated competitor observation"
+  ],
+  "createdAt": "2026-06-20T20:30:00Z",
+  "updatedAt": "2026-06-20T20:45:00Z"
+}
+```
+
+Possible errors: `400 Bad Request`, `401 Unauthorized`, `404 Not Found` when the analysis does not exist or belongs to another user.
+
+## Delete an analysis
+
+`DELETE /api/analyze/{id}`
+
+Deletes an analysis owned by the authenticated user. Requires an access token.
+
+Success - `204 No Content` with an empty response body.
+
+Possible errors: `401 Unauthorized`, `404 Not Found` when the analysis does not exist or belongs to another user.
