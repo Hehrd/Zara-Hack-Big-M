@@ -1,11 +1,18 @@
 spring:
+  config:
+    import:
+      - optional:file:.env[.properties]
+      - optional:file:Backend/.env[.properties]
+
   application:
     name: zara-hack-preparation
+
   datasource:
     url: ${SUPABASE_DB_URL}
     username: ${SUPABASE_DB_USER}
     password: ${SUPABASE_DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
+
   jpa:
     hibernate:
       ddl-auto: update
@@ -22,6 +29,6 @@ server:
 app:
   auth:
     issuer: ${APP_AUTH_ISSUER:zara-hack-preparation}
-    secret: ${APP_AUTH_SECRET:2b0b9d67693ed2430d03f3605f53aa03e4c9267b8f0dff3c148e4a92ee819f3b}
+    secret: ${APP_AUTH_SECRET}
     access-token-ttl: ${APP_AUTH_ACCESS_TOKEN_TTL:PT15M}
     refresh-token-ttl: ${APP_AUTH_REFRESH_TOKEN_TTL:P30D}
