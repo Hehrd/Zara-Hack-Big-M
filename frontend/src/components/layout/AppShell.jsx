@@ -4,6 +4,10 @@ import { LocusLogo } from '@/components/LocusLogo'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store/appStore'
+import { logOut } from '@/api/auth'
+import { clearAuthSession, getAuthSession } from '@/api/authSession'
+import { useEffect } from 'react'
+import { useNavigate } from '@tanstack/react-router'
 
 const productLinks = [
   { to: '/dashboard', label: 'Dashboard', icon: BarChart3 },
@@ -33,8 +37,29 @@ function PublicShell() {
 }
 
 function ProductShell() {
-  const { sidebarOpen, toggleSidebar, user } = useAppStore()
+  const { sidebarOpen, toggleSidebar, user, setUser } = useAppStore()
+  const navigate = useNavigate()
   const linkClass = 'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/8 hover:text-white'
+
+  useEffect(() => {
+    if (!user) navigate({ to: '/login', replace: true })
+    const handleExpired = () => { setUser(null); navigate({ to: '/login', replace: true }) }
+    window.addEventListener('auth:expired', handleExpired)
+    return () => window.removeEventListener('auth:expired', handleExpired)
+  }, [navigate, setUser, user])
+
+  async function handleLogout() {
+    const refreshToken = getAuthSession()?.refreshToken
+    try {
+      if (refreshToken) await logOut(refreshToken)
+    } finally {
+      clearAuthSession()
+      setUser(null)
+      navigate({ to: '/login', replace: true })
+    }
+  }
+
+  if (!user) return null
 
   return (
     <div className="min-h-screen bg-[#f6f7f3] lg:grid lg:grid-cols-[232px_1fr]">
@@ -57,7 +82,7 @@ function ProductShell() {
           <div className="flex items-center gap-3 rounded-xl px-2 py-2">
             <span className="grid size-9 place-items-center rounded-full bg-white/10"><UserRound className="size-4" /></span>
             <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{user.name}</p><p className="text-xs text-slate-400">Owner account</p></div>
-            <LogOut className="size-4 text-slate-500" />
+            <Button variant="ghost" size="icon" onClick={handleLogout} aria-label="Log out" className="text-slate-400 hover:text-white"><LogOut className="size-4" /></Button>
           </div>
         </div>
       </aside>

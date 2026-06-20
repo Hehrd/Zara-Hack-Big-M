@@ -1,7 +1,8 @@
 import { create } from 'zustand'
+import { sessionUser } from '@/api/authSession'
 
 export const useAppStore = create((set) => ({
-  user: { id: 'demo-user', name: 'Demo owner' },
+  user: sessionUser(),
   selectedDeviceId: null,
   sidebarOpen: false,
   modalOpen: false,

@@ -4,21 +4,23 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { LocusMark } from '@/components/LocusLogo'
 import { useAppStore } from '@/store/appStore'
+import { logIn, signUp } from '@/api/auth'
+import { saveAuthSession } from '@/api/authSession'
 
 export function AuthForm({ mode }) {
   const isRegister = mode === 'register'
   const navigate = useNavigate()
   const setUser = useAppStore((state) => state.setUser)
   const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
-    const name = formData.get('name')?.trim()
     const email = formData.get('email')?.trim()
     const password = formData.get('password')
 
-    if (!email || !password || (isRegister && !name)) {
+    if (!email || !password) {
       setError('Please complete all fields.')
       return
     }
@@ -28,8 +30,19 @@ export function AuthForm({ mode }) {
       return
     }
 
-    setUser({ id: email, name: name || email.split('@')[0] })
-    navigate({ to: '/dashboard' })
+    setError('')
+    setSubmitting(true)
+    try {
+      if (isRegister) await signUp({ email, password })
+      const tokens = await logIn({ email, password })
+      saveAuthSession(tokens, email)
+      setUser({ id: email, name: email.split('@')[0], email })
+      navigate({ to: '/dashboard' })
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || 'Unable to connect to the server. Please try again.')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -44,12 +57,6 @@ export function AuthForm({ mode }) {
         <h1 className="text-4xl font-semibold tracking-[-0.045em]">{isRegister ? 'Start finding your next location.' : 'Continue your search.'}</h1>
         <p className="mt-3 text-sm leading-6 text-muted-foreground">{isRegister ? 'Set up your free Locus workspace in less than a minute.' : 'Log in to return to your analyses and saved locations.'}</p>
         <form className="mt-8 space-y-4" onSubmit={handleSubmit}>
-          {isRegister && (
-            <label className="block space-y-1.5 text-sm font-medium">
-              Name
-              <Input name="name" autoComplete="name" placeholder="Your name" />
-            </label>
-          )}
           <label className="block space-y-1.5 text-sm font-medium">
             Email
             <Input name="email" type="email" autoComplete="email" placeholder="you@example.com" />
@@ -65,7 +72,7 @@ export function AuthForm({ mode }) {
             </label>
           )}
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-          <Button className="mt-2 h-10 w-full" type="submit">{isRegister ? 'Create account' : 'Log in'}</Button>
+          <Button className="mt-2 h-10 w-full" type="submit" disabled={submitting}>{submitting ? 'Please wait…' : isRegister ? 'Create account' : 'Log in'}</Button>
         </form>
         <p className="mt-4 text-center text-sm text-muted-foreground">
           {isRegister ? 'Already registered?' : 'Need an account?'}{' '}
