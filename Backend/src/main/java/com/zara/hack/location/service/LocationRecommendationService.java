@@ -2,8 +2,8 @@ package com.zara.hack.location.service;
 
 import com.zara.hack.common.exception.CustomException;
 import com.zara.hack.location.client.GoogleMapsClient;
-import com.zara.hack.location.client.GrokExplanationClient;
 import com.zara.hack.location.client.ModelServiceClient;
+import com.zara.hack.location.client.OpenAiExplanationClient;
 import com.zara.hack.location.config.LocationProperties;
 import com.zara.hack.location.dto.BusinessLocationRequest;
 import com.zara.hack.location.dto.CombinedLocationResponse;
@@ -27,26 +27,26 @@ import java.util.UUID;
 public class LocationRecommendationService {
 
     private static final Logger log = LoggerFactory.getLogger(LocationRecommendationService.class);
-    private static final String PROVIDER_GROK = "xAI Grok";
+    private static final String PROVIDER_OPENAI = "OpenAI";
     private static final String PROVIDER_TEMPLATE = "Spring Boot template fallback";
 
     private final ModelServiceClient modelServiceClient;
     private final GoogleMapsClient googleMapsClient;
     private final SparkScoringRunner sparkScoringRunner;
-    private final GrokExplanationClient grokExplanationClient;
+    private final OpenAiExplanationClient openAiExplanationClient;
     private final TemplateExplanationFallback templateFallback;
     private final LocationProperties properties;
 
     public LocationRecommendationService(ModelServiceClient modelServiceClient,
                                          GoogleMapsClient googleMapsClient,
                                          SparkScoringRunner sparkScoringRunner,
-                                         GrokExplanationClient grokExplanationClient,
+                                         OpenAiExplanationClient openAiExplanationClient,
                                          TemplateExplanationFallback templateFallback,
                                          LocationProperties properties) {
         this.modelServiceClient = modelServiceClient;
         this.googleMapsClient = googleMapsClient;
         this.sparkScoringRunner = sparkScoringRunner;
-        this.grokExplanationClient = grokExplanationClient;
+        this.openAiExplanationClient = openAiExplanationClient;
         this.templateFallback = templateFallback;
         this.properties = properties;
     }
@@ -104,8 +104,8 @@ public class LocationRecommendationService {
         List<LocationExplanation> explanations = new ArrayList<>();
         String businessType = analysis.businessNeeds().businessType();
         for (LsoaScore score : ranked) {
-            String text = grokExplanationClient.explain(score, businessType);
-            String provider = PROVIDER_GROK;
+            String text = openAiExplanationClient.explain(score, businessType);
+            String provider = PROVIDER_OPENAI;
             if (text == null) {
                 text = templateFallback.explain(score, analysis.selectedCategories());
                 provider = PROVIDER_TEMPLATE;
