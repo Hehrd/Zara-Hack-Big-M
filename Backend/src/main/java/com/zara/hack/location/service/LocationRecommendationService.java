@@ -121,7 +121,8 @@ public class LocationRecommendationService {
                 analysis.layerWeights(),
                 scores,
                 ranked,
-                explanations);
+                explanations,
+                points);
 
         if (userId == null) {
             return response;

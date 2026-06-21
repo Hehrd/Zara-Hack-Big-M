@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { getRouteApi, useNavigate } from '@tanstack/react-router'
 import { GoogleMapsOverlay } from '@deck.gl/google-maps'
-import { GeoJsonLayer } from '@deck.gl/layers'
+import { GeoJsonLayer, ScatterplotLayer } from '@deck.gl/layers'
 import { Bookmark, BookmarkCheck, Building2, Compass, Eraser, Flag, GitCompareArrows, LoaderCircle, MapPin, RotateCcw, Rotate3D, SlidersHorizontal, Sparkles, Trophy, TrendingDown, TrendingUp, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -130,6 +130,33 @@ function buildHeatmapLayer(featureCollection, is3D, zoom, selectedCode, comparis
   })
 }
 
+// Point-overlay categories from the backend's Google Places layers. Competitors
+// are a negative signal (red); relevant locations are a positive one (green).
+const POINT_CATEGORIES = {
+  competitors: { label: 'Competitors', color: [220, 38, 38] },
+  relevant_locations: { label: 'Relevant locations', color: [21, 128, 61] },
+}
+
+function buildPointsLayer(points) {
+  return new ScatterplotLayer({
+    id: 'google-maps-points',
+    data: points,
+    getPosition: (p) => [p.longitude, p.latitude],
+    getFillColor: (p) => POINT_CATEGORIES[p.category_id]?.color ?? [100, 116, 139],
+    getLineColor: [255, 255, 255, 230],
+    lineWidthMinPixels: 1.5,
+    stroked: true,
+    filled: true,
+    radiusUnits: 'pixels',
+    getRadius: 6,
+    radiusMinPixels: 4,
+    radiusMaxPixels: 9,
+    pickable: true,
+    autoHighlight: true,
+    highlightColor: [255, 255, 255, 120],
+  })
+}
+
 export function MapsPage() {
   const navigate = useNavigate()
   const mapElement = useRef(null)
@@ -195,6 +222,16 @@ export function MapsPage() {
     () => (result?.heatmap_layer ? toFeatureCollection(result.heatmap_layer) : null),
     [result],
   )
+  const mapPoints = useMemo(
+    () => (result?.google_maps_points ?? []).filter((p) => Number.isFinite(p.latitude) && Number.isFinite(p.longitude)),
+    [result],
+  )
+  const pointLegend = useMemo(() => {
+    const present = new Set(mapPoints.map((p) => p.category_id))
+    return Object.entries(POINT_CATEGORIES)
+      .filter(([id]) => present.has(id))
+      .map(([id, meta]) => ({ id, ...meta, count: mapPoints.filter((p) => p.category_id === id).length }))
+  }, [mapPoints])
   const scoreRange = useMemo(() => {
     const scores = result?.heatmap_layer?.map((area) => area.final_score) ?? []
     if (!scores.length) return null
@@ -291,8 +328,10 @@ export function MapsPage() {
 
   useEffect(() => {
     if (!overlayRef.current || !visibleFeatureCollection) return
-    overlayRef.current.setProps({ layers: [buildHeatmapLayer(visibleFeatureCollection, is3D, zoom, selected?.lsoaCode, comparisonAreas.map((area) => area.lsoa_code), setSelected)] })
-  }, [visibleFeatureCollection, is3D, zoom, selected, comparisonAreas])
+    const layers = [buildHeatmapLayer(visibleFeatureCollection, is3D, zoom, selected?.lsoaCode, comparisonAreas.map((area) => area.lsoa_code), setSelected)]
+    if (mapPoints.length) layers.push(buildPointsLayer(mapPoints))
+    overlayRef.current.setProps({ layers })
+  }, [visibleFeatureCollection, is3D, zoom, selected, comparisonAreas, mapPoints])
 
   useEffect(() => {
     const ranked = result?.ranked_locations ?? []
@@ -554,6 +593,18 @@ export function MapsPage() {
           />}
           <div className="h-2 w-full rounded-full" style={{ background: 'linear-gradient(90deg, rgb(30,58,138), rgb(16,185,129), rgb(250,204,21), rgb(239,68,68))' }} />
           <div className="mt-1 flex justify-between text-[10px] text-muted-foreground"><span>{scoreRange?.min.toFixed(3)}</span><span>{scoreRange?.max.toFixed(3)}</span></div>
+          {pointLegend.length > 0 && (
+            <div className="mt-3 space-y-1.5 border-t pt-2.5">
+              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Nearby places</p>
+              {pointLegend.map((item) => (
+                <div key={item.id} className="flex items-center gap-2">
+                  <span className="size-2.5 shrink-0 rounded-full ring-1 ring-white" style={{ backgroundColor: `rgb(${item.color.join(',')})` }} />
+                  <span className="flex-1 truncate">{item.label}</span>
+                  <span className="font-semibold tabular-nums text-muted-foreground">{item.count}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

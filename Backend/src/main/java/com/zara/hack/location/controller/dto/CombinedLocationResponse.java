@@ -14,10 +14,11 @@ public record CombinedLocationResponse(
         List<LayerWeight> layerWeights,
         List<LsoaScore> heatmapLayer,
         List<LsoaScore> rankedLocations,
-        List<LocationExplanation> explanations
+        List<LocationExplanation> explanations,
+        List<GoogleMapsPoint> googleMapsPoints
 ) {
     public CombinedLocationResponse withAnalysisId(Long analysisId) {
         return new CombinedLocationResponse(analysisId, city, businessNeeds, selectedCategories,
-                layerWeights, heatmapLayer, rankedLocations, explanations);
+                layerWeights, heatmapLayer, rankedLocations, explanations, googleMapsPoints);
     }
 }

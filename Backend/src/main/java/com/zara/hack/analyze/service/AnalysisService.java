@@ -146,7 +146,7 @@ public class AnalysisService {
 
         CombinedLocationResponse updated = new CombinedLocationResponse(
                 res.analysisId(), res.city(), res.businessNeeds(), res.selectedCategories(),
-                newWeights, rescored, ranked, explanations);
+                newWeights, rescored, ranked, explanations, res.googleMapsPoints());
 
         entity.setResult(jsonMapper.writeValueAsString(updated));
         analysisRepository.saveAndFlush(entity);
