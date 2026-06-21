@@ -18,18 +18,21 @@ export function AppShell() {
   const pathname = useRouterState({ select: (state) => state.location.pathname })
   const isPublic = pathname === '/' || pathname === '/login' || pathname === '/register'
 
-  return isPublic ? <PublicShell /> : <ProductShell />
+  return isPublic ? <PublicShell isHome={pathname === '/'} /> : <ProductShell />
 }
 
-function PublicShell() {
+function PublicShell({ isHome }) {
   return (
-    <div className="min-h-screen overflow-hidden">
-      <header className="relative z-20 mx-auto flex h-20 max-w-7xl items-center justify-between px-5 lg:px-8">
-        <LocusLogo />
-        <nav className="flex items-center gap-2">
-          <Button variant="ghost" nativeButton={false} render={<Link to="/login" />}>Log in</Button>
-          <Button nativeButton={false} render={<Link to="/register" />}>Get started</Button>
-        </nav>
+    <div className="min-h-screen overflow-x-clip">
+      <header className="sticky top-0 z-30 border-b border-emerald-950/8 bg-[#f7f6f0]/88 backdrop-blur-xl">
+        <div className="mx-auto flex h-[72px] max-w-[1400px] items-center justify-between px-5 sm:px-8 lg:px-12">
+          <LocusLogo />
+          {isHome && <nav className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-8 text-xs font-medium text-[#5e6d65] md:flex" aria-label="Landing page"><a href="#how-it-works" className="hover:text-[#173f31]">How it works</a><a href="#signals" className="hover:text-[#173f31]">Signals</a></nav>}
+          <nav className="flex items-center gap-1.5 sm:gap-2" aria-label="Account">
+            <Button variant="ghost" className="h-9 px-3 text-[#4f6057]" nativeButton={false} render={<Link to="/login" />}>Log in</Button>
+            <Button className="h-9 rounded-lg bg-[#173f31] px-3.5 text-white hover:bg-[#215541] sm:px-4" nativeButton={false} render={<Link to="/register" />}>{isHome ? 'Analyze a location' : 'Get started'}</Button>
+          </nav>
+        </div>
       </header>
       <main><Outlet /></main>
     </div>

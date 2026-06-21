@@ -65,4 +65,12 @@
   .contour-field {
     background-image: radial-gradient(ellipse at 50% 50%, transparent 0 13%, color-mix(in oklch, var(--primary) 16%, transparent) 13.3% 13.9%, transparent 14.2% 24%, color-mix(in oklch, var(--primary) 12%, transparent) 24.3% 24.9%, transparent 25.2% 37%, color-mix(in oklch, var(--primary) 10%, transparent) 37.3% 37.9%, transparent 38.2% 52%, color-mix(in oklch, var(--primary) 8%, transparent) 52.3% 52.9%, transparent 53.2%);
   }
+
+}
+
+.landing-page { scroll-behavior: smooth; }
+.landing-page a:focus-visible { outline: 2px solid var(--ring); outline-offset: 4px; border-radius: 0.5rem; }
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-page { scroll-behavior: auto; }
 }
