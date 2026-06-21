@@ -59,7 +59,47 @@ public class GoogleMapsClient {
             String term = needs.isEmpty() ? businessType : needs.get(0);
             points.addAll(textSearch("relevant_locations", term + " in " + city, city, restriction));
         }
+        // The Places locationRestriction is only a bounding box, so it lets through
+        // points inside the box but outside the drawn polygon. Filter to the exact
+        // polygon so nothing outside the selected region is ever returned.
+        if (hasPolygon(region)) {
+            int before = points.size();
+            points = points.stream()
+                    .filter(p -> pointInPolygon(p.latitude(), p.longitude(), region))
+                    .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+            log.info("Region polygon filter retained {} of {} points", points.size(), before);
+        }
         return points;
+    }
+
+    private boolean hasPolygon(JsonNode region) {
+        if (region == null || !region.has("coordinates")) {
+            return false;
+        }
+        JsonNode ring = region.get("coordinates").path(0);
+        return ring.isArray() && ring.size() >= 4;
+    }
+
+    /**
+     * Ray-casting point-in-polygon test against the outer ring of a GeoJSON
+     * Polygon ({@code coordinates[0]}, a list of [lng, lat] pairs).
+     */
+    private boolean pointInPolygon(double lat, double lng, JsonNode region) {
+        JsonNode ring = region.get("coordinates").path(0);
+        boolean inside = false;
+        int n = ring.size();
+        for (int i = 0, j = n - 1; i < n; j = i++) {
+            double xi = ring.get(i).get(0).asDouble(); // lng
+            double yi = ring.get(i).get(1).asDouble(); // lat
+            double xj = ring.get(j).get(0).asDouble();
+            double yj = ring.get(j).get(1).asDouble();
+            boolean intersects = ((yi > lat) != (yj > lat))
+                    && (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi);
+            if (intersects) {
+                inside = !inside;
+            }
+        }
+        return inside;
     }
 
     /**
