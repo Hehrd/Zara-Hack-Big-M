@@ -2,6 +2,7 @@ package com.zara.hack.analyze.service;
 
 import com.zara.hack.analyze.controller.dto.AnalysisDetailDTO;
 import com.zara.hack.analyze.controller.dto.AnalysisSummaryDTO;
+import com.zara.hack.analyze.controller.dto.ReqRescoreDTO;
 import com.zara.hack.analyze.controller.dto.ResAnalysisDTO;
 import com.zara.hack.analyze.persistence.entity.AnalysisEntity;
 import com.zara.hack.analyze.persistence.repository.AnalysisRepository;
@@ -9,11 +10,22 @@ import com.zara.hack.auth.entity.AppUser;
 import com.zara.hack.auth.repository.AppUserRepository;
 import com.zara.hack.common.exception.AnalysisNotFoundException;
 import com.zara.hack.common.exception.AuthenticationUserNotFoundException;
+import com.zara.hack.common.exception.CustomException;
+import com.zara.hack.location.controller.dto.CombinedLocationResponse;
+import com.zara.hack.location.controller.dto.LayerWeight;
+import com.zara.hack.location.controller.dto.LocationExplanation;
+import com.zara.hack.location.controller.dto.LsoaScore;
 import jakarta.transaction.Transactional;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class AnalysisService {
@@ -62,6 +74,72 @@ public class AnalysisService {
                 e.getRegion() == null ? null : jsonMapper.readTree(e.getRegion()),
                 e.getResult() == null ? null : jsonMapper.readTree(e.getResult()),
                 e.getCreatedAt());
+    }
+
+    @Transactional
+    public AnalysisDetailDTO rescoreAnalysis(Long userId, Long analysisId, ReqRescoreDTO req) {
+        AnalysisEntity entity = findOwnedAnalysis(userId, analysisId);
+        if (entity.getResult() == null) {
+            throw new CustomException(HttpStatus.UNPROCESSABLE_ENTITY,
+                    "This analysis has no scored result to re-score");
+        }
+        CombinedLocationResponse res = jsonMapper.readValue(entity.getResult(), CombinedLocationResponse.class);
+
+        Map<String, Double> overrides = req.weights().stream()
+                .collect(Collectors.toMap(ReqRescoreDTO.WeightOverride::categoryId,
+                        ReqRescoreDTO.WeightOverride::weight, (a, b) -> b));
+
+        List<LayerWeight> newWeights = res.layerWeights().stream()
+                .map(lw -> overrides.containsKey(lw.categoryId())
+                        ? new LayerWeight(lw.categoryId(), overrides.get(lw.categoryId()),
+                                appendEdited(lw.reason()))
+                        : lw)
+                .toList();
+
+        List<LsoaScore> rescored = res.heatmapLayer().stream()
+                .map(score -> applyWeights(score, newWeights))
+                .sorted(Comparator.comparingDouble(LsoaScore::finalScore).reversed())
+                .toList();
+
+        int n = entity.getRequestedResultCount() != null && entity.getRequestedResultCount() > 0
+                ? entity.getRequestedResultCount() : rescored.size();
+        List<LsoaScore> ranked = rescored.subList(0, Math.min(n, rescored.size()));
+
+        Set<String> rankedCodes = ranked.stream().map(LsoaScore::lsoaCode).collect(Collectors.toSet());
+        List<LocationExplanation> explanations = res.explanations() == null ? List.of()
+                : res.explanations().stream()
+                        .filter(e -> rankedCodes.contains(e.lsoaCode()))
+                        .toList();
+
+        CombinedLocationResponse updated = new CombinedLocationResponse(
+                res.analysisId(), res.city(), res.businessNeeds(), res.selectedCategories(),
+                newWeights, rescored, ranked, explanations);
+
+        entity.setResult(jsonMapper.writeValueAsString(updated));
+        analysisRepository.saveAndFlush(entity);
+        return getAnalysisDetail(userId, analysisId);
+    }
+
+    private static String appendEdited(String reason) {
+        if (reason == null || reason.isBlank()) {
+            return "edited by user";
+        }
+        return reason.endsWith(" (edited)") ? reason : reason + " (edited)";
+    }
+
+    private static LsoaScore applyWeights(LsoaScore score, List<LayerWeight> weights) {
+        Map<String, Double> normalized = score.normalizedLayerValues() == null
+                ? Map.of() : score.normalizedLayerValues();
+        Map<String, Double> weighted = new LinkedHashMap<>();
+        double sum = 0.0;
+        for (LayerWeight lw : weights) {
+            double nv = normalized.getOrDefault(lw.categoryId(), 0.0);
+            double w = lw.weight() * nv;
+            weighted.put(lw.categoryId(), w);
+            sum += w;
+        }
+        return new LsoaScore(score.lsoaCode(), score.lsoaName(), score.geometry(),
+                score.centroid(), score.normalizedLayerValues(), weighted, sum);
     }
 
     @Transactional

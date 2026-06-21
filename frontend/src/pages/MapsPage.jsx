@@ -3,12 +3,12 @@ import { useMutation } from '@tanstack/react-query'
 import { getRouteApi, useNavigate } from '@tanstack/react-router'
 import { GoogleMapsOverlay } from '@deck.gl/google-maps'
 import { GeoJsonLayer } from '@deck.gl/layers'
-import { Bookmark, BookmarkCheck, Building2, Compass, Eraser, Flag, GitCompareArrows, LoaderCircle, MapPin, Rotate3D, Sparkles, Trophy, TrendingDown, TrendingUp, X } from 'lucide-react'
+import { Bookmark, BookmarkCheck, Building2, Compass, Eraser, Flag, GitCompareArrows, LoaderCircle, MapPin, RotateCcw, Rotate3D, SlidersHorizontal, Sparkles, Trophy, TrendingDown, TrendingUp, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { loadGoogleMaps } from '@/lib/googleMaps'
 import { createLocationRecommendations } from '@/api/recommendations'
-import { useAnalysis } from '@/hooks/useAnalyses'
+import { useAnalysis, useRescoreAnalysis } from '@/hooks/useAnalyses'
 import { useSaveRegion } from '@/hooks/useSavedRegions'
 
 const routeApi = getRouteApi('/maps')
@@ -165,10 +165,12 @@ export function MapsPage() {
   const { analysis: analysisParam } = routeApi.useSearch()
   const storedAnalysis = useAnalysis(analysisParam)
   const saveRegion = useSaveRegion()
+  const rescore = useRescoreAnalysis()
   const [savedCodes, setSavedCodes] = useState(() => new Set())
+  const [rescoredResult, setRescoredResult] = useState(null)
 
   const recommend = useMutation({ mutationFn: createLocationRecommendations })
-  const rawResult = recommend.data ?? storedAnalysis.data?.result ?? undefined
+  const rawResult = rescoredResult ?? recommend.data ?? storedAnalysis.data?.result ?? undefined
   const analysisId = recommend.data?.analysis_id ?? storedAnalysis.data?.id ?? null
   const result = useMemo(() => {
     if (!rawResult || submittedAreaPoints.length < 3) return rawResult
@@ -309,6 +311,7 @@ export function MapsPage() {
     setComparisonAreas([])
     setIsComparisonOpen(false)
     setMinimumScore(null)
+    setRescoredResult(null)
     setSubmittedAreaPoints(areaMode === 'custom' ? customPoints : [])
     const region = areaMode === 'custom' && customPoints.length >= 3
       ? pointsToGeoJsonPolygon(customPoints)
@@ -415,6 +418,7 @@ export function MapsPage() {
     recommend.reset()
     setSelected(null)
     setSavedCodes(new Set())
+    setRescoredResult(null)
     setComparisonAreas([])
     setIsComparisonOpen(false)
     setMinimumScore(null)
@@ -438,6 +442,15 @@ export function MapsPage() {
     saveRegion.mutate(
       { analysisId, lsoaCode: region.lsoaCode },
       { onSuccess: () => setSavedCodes((prev) => new Set(prev).add(region.lsoaCode)) },
+    )
+  }
+
+  function handleApplyWeights(weights) {
+    if (!analysisId) return
+    setSelected(null)
+    rescore.mutate(
+      { id: analysisId, weights },
+      { onSuccess: (data) => setRescoredResult(data.result) },
     )
   }
 
@@ -515,7 +528,7 @@ export function MapsPage() {
 
         {!result && !recommend.isPending && <div className="mt-6 rounded-2xl bg-[#f3f6f1] p-4"><div className="flex items-center gap-2 text-sm font-medium"><Sparkles className="size-4 text-emerald-700" /> What happens next</div><p className="mt-2 text-xs leading-5 text-muted-foreground">The backend scores every area, returns a ranked surface, and Locus colors the map. Click any area to inspect its score.</p></div>}
 
-        {result && <ResultPanel result={result} selected={selected} selectedExplanation={selectedExplanation} explanationFor={explanationFor} onLocationSelect={showRankedLocation} canSave={analysisId != null} onSaveRegion={handleSaveRegion} savedCodes={savedCodes} savingCode={saveRegion.isPending ? saveRegion.variables?.lsoaCode : null} />}
+        {result && <ResultPanel result={result} selected={selected} selectedExplanation={selectedExplanation} explanationFor={explanationFor} onLocationSelect={showRankedLocation} canSave={analysisId != null} onSaveRegion={handleSaveRegion} savedCodes={savedCodes} savingCode={saveRegion.isPending ? saveRegion.variables?.lsoaCode : null} onApplyWeights={handleApplyWeights} rescoring={rescore.isPending} rescoreError={rescore.error} />}
       </aside>
 
       {result && (isComparisonOpen ? <div className="absolute right-4 top-32 z-20 w-72 rounded-2xl border bg-slate-950 p-4 text-white shadow-xl lg:right-6">
@@ -547,7 +560,68 @@ export function MapsPage() {
   )
 }
 
-function ResultPanel({ result, selected, selectedExplanation, explanationFor, onLocationSelect, canSave, onSaveRegion, savedCodes, savingCode }) {
+function WeightsEditor({ result, canApply, onApply, rescoring, rescoreError }) {
+  const layerWeights = result.layer_weights ?? []
+
+  const nameFor = useMemo(() => {
+    const map = {}
+    for (const c of result.selected_categories ?? []) map[c.category_id] = c.display_name
+    return (id) => map[id] ?? formatLayerName(id)
+  }, [result])
+
+  const initial = useMemo(() => {
+    const map = {}
+    for (const w of layerWeights) map[w.category_id] = w.weight
+    return map
+  }, [result])
+
+  const bound = useMemo(() => {
+    const max = Math.max(1, ...layerWeights.map((w) => Math.abs(w.weight)))
+    return Math.ceil(max * 10) / 10
+  }, [result])
+
+  const [draft, setDraft] = useState(initial)
+  useEffect(() => { setDraft(initial) }, [initial])
+
+  if (layerWeights.length === 0) return null
+
+  const dirty = layerWeights.some((w) => Math.abs((draft[w.category_id] ?? w.weight) - w.weight) > 1e-9)
+
+  function apply() {
+    onApply(layerWeights.map((w) => ({ category_id: w.category_id, weight: Number(draft[w.category_id] ?? w.weight) })))
+  }
+
+  return (
+    <div className="rounded-2xl border bg-white p-4">
+      <div className="flex items-center justify-between gap-2">
+        <p className="flex items-center gap-2 text-sm font-semibold"><SlidersHorizontal className="size-4 text-emerald-700" /> Scoring weights</p>
+        <button type="button" className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground disabled:opacity-40" disabled={!dirty || rescoring} onClick={() => setDraft(initial)}><RotateCcw className="size-3" /> Reset</button>
+      </div>
+      <p className="mt-1 text-[11px] leading-4 text-muted-foreground">These weights decide how each area is scored. Drag to emphasize or penalize a factor, then apply to re-rank.</p>
+      <div className="mt-3 space-y-3">
+        {layerWeights.map((w) => {
+          const value = draft[w.category_id] ?? w.weight
+          return (
+            <div key={w.category_id}>
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="font-medium" title={w.reason}>{nameFor(w.category_id)}</span>
+                <span className={`font-semibold tabular-nums ${value < 0 ? 'text-amber-600' : 'text-emerald-700'}`}>{value.toFixed(2)}</span>
+              </div>
+              <input type="range" min={-bound} max={bound} step="0.01" value={value} disabled={rescoring} onChange={(e) => setDraft((d) => ({ ...d, [w.category_id]: Number(e.target.value) }))} className="mt-1 h-1.5 w-full cursor-pointer appearance-none rounded-full bg-slate-200 accent-emerald-600 disabled:cursor-not-allowed" />
+            </div>
+          )
+        })}
+      </div>
+      {rescoreError && <p role="alert" className="mt-3 rounded-lg bg-destructive/10 p-2 text-[11px] text-destructive">{rescoreError.response?.data?.message || rescoreError.message}</p>}
+      <Button type="button" size="sm" className="mt-3 w-full" disabled={!canApply || rescoring || !dirty} onClick={apply}>
+        {rescoring ? <><LoaderCircle className="size-4 animate-spin" /> Applying…</> : <><SlidersHorizontal className="size-4" /> Apply weights</>}
+      </Button>
+      {!canApply && <p className="mt-2 text-[10px] text-muted-foreground">Run or open an analysis to adjust weights.</p>}
+    </div>
+  )
+}
+
+function ResultPanel({ result, selected, selectedExplanation, explanationFor, onLocationSelect, canSave, onSaveRegion, savedCodes, savingCode, onApplyWeights, rescoring, rescoreError }) {
   return (
     <div className="mt-6 space-y-5 border-t pt-5">
       <div>
@@ -561,6 +635,8 @@ function ResultPanel({ result, selected, selectedExplanation, explanationFor, on
           </div>
         )}
       </div>
+
+      <WeightsEditor result={result} canApply={canSave} onApply={onApplyWeights} rescoring={rescoring} rescoreError={rescoreError} />
 
       {selected && (
         <div className="rounded-2xl border bg-white p-4">
