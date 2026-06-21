@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { addFriend, getFriendAnalyses, getFriends, removeFriend } from '@/api/friends'
+import { addFriend, getFriendAnalyses, getFriendLocations, getFriends, removeFriend } from '@/api/friends'
 
 export function useFriends() {
   return useQuery({ queryKey: ['friends'], queryFn: getFriends })
@@ -9,6 +9,14 @@ export function useFriendAnalyses(friendId) {
   return useQuery({
     queryKey: ['friends', friendId, 'analyses'],
     queryFn: () => getFriendAnalyses(friendId),
+    enabled: friendId != null,
+  })
+}
+
+export function useFriendLocations(friendId) {
+  return useQuery({
+    queryKey: ['friends', friendId, 'locations'],
+    queryFn: () => getFriendLocations(friendId),
     enabled: friendId != null,
   })
 }

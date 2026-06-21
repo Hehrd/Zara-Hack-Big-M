@@ -75,6 +75,13 @@ public class SavedRegionService {
     }
 
     @Transactional
+    public List<ResSavedRegionDTO> getPublicRegions(Long ownerId) {
+        return savedRegionRepository.findAllByUserIdAndPublicSharedTrueOrderByCreatedAtDesc(ownerId).stream()
+                .map(this::toDto)
+                .toList();
+    }
+
+    @Transactional
     public ResSavedRegionDTO update(Long userId, Long id, ReqUpdateSavedRegionDTO req) {
         SavedRegionEntity entity = findOwned(userId, id);
         entity.setNotes(req.notes());

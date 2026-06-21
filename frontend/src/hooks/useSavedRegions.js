@@ -4,6 +4,7 @@ import {
   getSavedRegions,
   saveRegion,
   updateSavedRegion,
+  updateSavedRegionVisibility,
 } from '@/api/savedRegions'
 
 export function useSavedRegions() {
@@ -21,7 +22,15 @@ export function useSaveRegion() {
 export function useUpdateSavedRegion() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, notes, tags }) => updateSavedRegion(id, { notes, tags }),
+    mutationFn: ({ id, notes }) => updateSavedRegion(id, { notes }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['saved-regions'] }),
+  })
+}
+
+export function useUpdateSavedRegionVisibility() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, publicShared }) => updateSavedRegionVisibility(id, publicShared),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['saved-regions'] }),
   })
 }

@@ -11,6 +11,8 @@ import com.zara.hack.common.exception.CustomException;
 import com.zara.hack.friends.controller.dto.FriendDTO;
 import com.zara.hack.friends.persistence.entity.FriendshipEntity;
 import com.zara.hack.friends.persistence.repository.FriendshipRepository;
+import com.zara.hack.saved.controller.dto.ResSavedRegionDTO;
+import com.zara.hack.saved.service.SavedRegionService;
 import jakarta.transaction.Transactional;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -23,13 +25,16 @@ public class FriendService {
     private final FriendshipRepository friendshipRepository;
     private final AppUserRepository userRepository;
     private final AnalysisService analysisService;
+    private final SavedRegionService savedRegionService;
 
     public FriendService(FriendshipRepository friendshipRepository,
                          AppUserRepository userRepository,
-                         AnalysisService analysisService) {
+                         AnalysisService analysisService,
+                         SavedRegionService savedRegionService) {
         this.friendshipRepository = friendshipRepository;
         this.userRepository = userRepository;
         this.analysisService = analysisService;
+        this.savedRegionService = savedRegionService;
     }
 
     @Transactional
@@ -71,6 +76,12 @@ public class FriendService {
     public AnalysisDetailDTO getFriendAnalysisDetail(Long meId, Long friendId, Long analysisId) {
         requireFriendship(meId, friendId);
         return analysisService.getPublicAnalysisDetail(friendId, analysisId);
+    }
+
+    @Transactional
+    public List<ResSavedRegionDTO> getFriendSavedRegions(Long meId, Long friendId) {
+        requireFriendship(meId, friendId);
+        return savedRegionService.getPublicRegions(friendId);
     }
 
     @Transactional

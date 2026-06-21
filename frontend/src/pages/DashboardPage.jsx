@@ -3,9 +3,9 @@ import { Link } from '@tanstack/react-router'
 import { motion, useReducedMotion } from 'motion/react'
 import { ArrowRight, ArrowUpRight, BarChart3, Bookmark, Clock3, Compass, Flag, MapPinned, Pencil, Sparkles, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { useAnalyses } from '@/hooks/useAnalyses'
-import { useDeleteSavedRegion, useSavedRegions, useUpdateSavedRegion } from '@/hooks/useSavedRegions'
+import { VisibilityToggle } from '@/components/VisibilityToggle'
+import { useAnalyses, useUpdateAnalysisVisibility } from '@/hooks/useAnalyses'
+import { useDeleteSavedRegion, useSavedRegions, useUpdateSavedRegion, useUpdateSavedRegionVisibility } from '@/hooks/useSavedRegions'
 
 const EASE = [0.22, 1, 0.36, 1]
 
@@ -225,30 +225,44 @@ function RecentAnalysesPanel({ query }) {
       {!isLoading && !isError && (data?.length ? (
         <ul className="space-y-3">
           {data.map((a) => (
-            <motion.li key={a.id} whileHover={{ y: -3 }} transition={{ type: 'spring', stiffness: 360, damping: 24 }}>
-              <Link
-                to="/maps"
-                search={{ analysis: a.id }}
-                className="group block rounded-2xl border border-[#173f31]/10 bg-white p-4 transition-colors hover:border-emerald-400 hover:shadow-[0_22px_50px_-38px_rgba(20,57,43,.55)]"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-[#17251f]">{a.business_description || 'Untitled analysis'}</p>
-                    <p className="mt-1 text-[11px] text-[#74827a]">{a.city} · top {a.requested_result_count} areas</p>
-                  </div>
-                  <span className="flex shrink-0 items-center gap-1.5 text-[11px] text-[#8a978f]">
-                    {formatDate(a.created_at)}
-                    <ArrowUpRight className="size-3.5 text-[#b3bdb6] transition-all group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-emerald-600" />
-                  </span>
-                </div>
-              </Link>
-            </motion.li>
+            <AnalysisCard key={a.id} analysis={a} />
           ))}
         </ul>
       ) : (
         <EmptyState icon={Clock3} text="Completed analyses will appear here so you can continue comparing areas." />
       ))}
     </Panel>
+  )
+}
+
+function AnalysisCard({ analysis }) {
+  const visibility = useUpdateAnalysisVisibility()
+
+  return (
+    <motion.li whileHover={{ y: -3 }} transition={{ type: 'spring', stiffness: 360, damping: 24 }}>
+      <div className="group rounded-2xl border border-[#173f31]/10 bg-white p-4 transition-colors hover:border-emerald-400 hover:shadow-[0_22px_50px_-38px_rgba(20,57,43,.55)]">
+        <Link to="/maps" search={{ analysis: analysis.id }} className="block">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-[#17251f]">{analysis.business_description || 'Untitled analysis'}</p>
+              <p className="mt-1 text-[11px] text-[#74827a]">{analysis.city} · top {analysis.requested_result_count} areas</p>
+            </div>
+            <span className="flex shrink-0 items-center gap-1.5 text-[11px] text-[#8a978f]">
+              {formatDate(analysis.created_at)}
+              <ArrowUpRight className="size-3.5 text-[#b3bdb6] transition-all group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-emerald-600" />
+            </span>
+          </div>
+        </Link>
+        <div className="mt-3 flex items-center justify-between border-t border-[#173f31]/8 pt-3">
+          <VisibilityToggle
+            isPublic={analysis.public_shared}
+            pending={visibility.isPending}
+            onToggle={(next) => visibility.mutate({ id: analysis.id, publicShared: next })}
+          />
+          {visibility.isError && <span className="text-[10px] text-destructive">Could not update.</span>}
+        </div>
+      </div>
+    </motion.li>
   )
 }
 
@@ -274,20 +288,24 @@ function SavedLocationsPanel({ query }) {
 function SavedRegionCard({ region }) {
   const update = useUpdateSavedRegion()
   const remove = useDeleteSavedRegion()
+  const visibility = useUpdateSavedRegionVisibility()
   const [editing, setEditing] = useState(false)
   const [notes, setNotes] = useState(region.notes ?? '')
-  const [tagsText, setTagsText] = useState((region.tags ?? []).join(', '))
 
   function startEditing() {
     setNotes(region.notes ?? '')
-    setTagsText((region.tags ?? []).join(', '))
     setEditing(true)
   }
 
   function saveEdits() {
-    const tags = tagsText.split(',').map((t) => t.trim()).filter(Boolean)
-    update.mutate({ id: region.id, notes: notes.trim() || null, tags }, { onSuccess: () => setEditing(false) })
+    update.mutate({ id: region.id, notes: notes.trim() || null }, { onSuccess: () => setEditing(false) })
   }
+
+  const visibilityError = visibility.isError
+    ? (visibility.error?.response?.status === 409
+        ? 'Make the analysis public first.'
+        : 'Could not update.')
+    : null
 
   return (
     <motion.li
@@ -306,18 +324,17 @@ function SavedRegionCard({ region }) {
       {!editing && (
         <>
           {region.notes && <p className="mt-3 text-[12px] leading-5 text-[#4f5d55]">{region.notes}</p>}
-          {region.tags?.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {region.tags.map((tag) => (
-                <span key={tag} className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-medium text-emerald-800">{tag}</span>
-              ))}
-            </div>
-          )}
-          <div className="mt-3 flex items-center gap-3 border-t border-[#173f31]/8 pt-3">
-            <Link to="/maps" search={{ analysis: region.analysis_id }} className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 hover:underline">
-              View analysis <ArrowRight className="size-3" />
-            </Link>
+          <div className="mt-3 flex items-center gap-2 border-t border-[#173f31]/8 pt-3">
+            <VisibilityToggle
+              isPublic={region.public_shared}
+              pending={visibility.isPending}
+              onToggle={(next) => visibility.mutate({ id: region.id, publicShared: next })}
+            />
+            {visibilityError && <span className="text-[10px] text-destructive">{visibilityError}</span>}
             <div className="ml-auto flex items-center gap-1">
+              <Link to="/maps" search={{ analysis: region.analysis_id }} className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 hover:underline">
+                View <ArrowRight className="size-3" />
+              </Link>
               <Button type="button" size="xs" variant="ghost" onClick={startEditing}><Pencil className="size-3.5" /> Edit</Button>
               <Button type="button" size="xs" variant="ghost" className="text-destructive hover:text-destructive" disabled={remove.isPending} onClick={() => remove.mutate(region.id)}><Trash2 className="size-3.5" /> Delete</Button>
             </div>
@@ -334,7 +351,6 @@ function SavedRegionCard({ region }) {
             placeholder="Notes (e.g. visited, too expensive)"
             className="w-full rounded-md border border-input bg-white p-2 text-[12px] leading-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
-          <Input value={tagsText} onChange={(e) => setTagsText(e.target.value)} placeholder="Tags, comma separated" className="h-9 text-[12px]" />
           <div className="flex items-center gap-2">
             <Button type="button" size="xs" onClick={saveEdits} disabled={update.isPending}>{update.isPending ? 'Saving…' : 'Save'}</Button>
             <Button type="button" size="xs" variant="ghost" onClick={() => setEditing(false)}><X className="size-3.5" /> Cancel</Button>

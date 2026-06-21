@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
+import { Eye, EyeOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { LocusMark } from '@/components/LocusLogo'
@@ -69,12 +70,12 @@ export function AuthForm({ mode }) {
           </label>
           <label className="block space-y-1.5 text-sm font-medium">
             Password
-            <Input name="password" type="password" autoComplete={isRegister ? 'new-password' : 'current-password'} placeholder="••••••••" />
+            <PasswordInput name="password" autoComplete={isRegister ? 'new-password' : 'current-password'} placeholder="••••••••" />
           </label>
           {isRegister && (
             <label className="block space-y-1.5 text-sm font-medium">
               Confirm password
-              <Input name="confirmPassword" type="password" autoComplete="new-password" placeholder="••••••••" />
+              <PasswordInput name="confirmPassword" autoComplete="new-password" placeholder="••••••••" />
             </label>
           )}
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
@@ -87,6 +88,25 @@ export function AuthForm({ mode }) {
           </Link>
         </p>
       </section>
+    </div>
+  )
+}
+
+function PasswordInput({ className, ...props }) {
+  const [visible, setVisible] = useState(false)
+  return (
+    <div className="relative">
+      <Input type={visible ? 'text' : 'password'} className={`pr-9 ${className ?? ''}`} {...props} />
+      <button
+        type="button"
+        onClick={() => setVisible((v) => !v)}
+        className="absolute inset-y-0 right-0 grid w-9 place-items-center text-muted-foreground transition-colors hover:text-foreground"
+        aria-label={visible ? 'Hide password' : 'Show password'}
+        aria-pressed={visible}
+        tabIndex={-1}
+      >
+        {visible ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+      </button>
     </div>
   )
 }

@@ -1,8 +1,8 @@
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
-import { ArrowRight, Clock3, Trash2, UserPlus, Users } from 'lucide-react'
+import { ArrowRight, Clock3, MapPin, Trash2, UserPlus, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/PageHeader'
-import { useFriendAnalyses, useFriends, useRemoveFriend } from '@/hooks/useFriends'
+import { useFriendAnalyses, useFriendLocations, useFriends, useRemoveFriend } from '@/hooks/useFriends'
 
 function formatDate(value) {
   if (!value) return ''
@@ -22,7 +22,10 @@ export function FriendsPage() {
       />
       <div className="grid gap-5 lg:grid-cols-[300px_1fr]">
         <FriendsListPanel query={friends} selectedId={selectedId} />
-        <FriendAnalysesPanel selectedId={selectedId} friends={friends.data} />
+        <div className="space-y-5">
+          <FriendAnalysesPanel selectedId={selectedId} friends={friends.data} />
+          {selectedId != null && <FriendLocationsPanel selectedId={selectedId} />}
+        </div>
       </div>
     </div>
   )
@@ -130,6 +133,41 @@ function FriendAnalysesPanel({ selectedId, friends }) {
           </ul>
         ) : (
           <p className="text-sm text-muted-foreground">This friend hasn't saved any analyses yet.</p>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function FriendLocationsPanel({ selectedId }) {
+  const { data, isLoading, isError } = useFriendLocations(selectedId != null ? selectedId : undefined)
+
+  return (
+    <section className="rounded-3xl border bg-white p-7">
+      <div className="flex items-center gap-3">
+        <span className="grid size-10 place-items-center rounded-xl bg-muted text-muted-foreground"><MapPin className="size-5" /></span>
+        <h2 className="text-lg font-semibold">Saved locations</h2>
+      </div>
+      <div className="mt-6">
+        {isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
+        {isError && <p className="text-sm text-destructive">Could not load this friend's locations.</p>}
+        {!isLoading && !isError && (data?.length ? (
+          <ul className="space-y-3">
+            {data.map((loc) => (
+              <li key={loc.id} className="rounded-2xl border bg-white p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold">{loc.lsoa_name || loc.lsoa_code}</p>
+                    <p className="mt-1 text-[11px] text-muted-foreground">{loc.city} · score {loc.final_score?.toFixed(2)}</p>
+                  </div>
+                  <span className="shrink-0 text-[11px] text-muted-foreground">{formatDate(loc.created_at)}</span>
+                </div>
+                {loc.notes && <p className="mt-2 text-xs text-muted-foreground">{loc.notes}</p>}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-muted-foreground">This friend hasn't shared any saved locations yet.</p>
         ))}
       </div>
     </section>

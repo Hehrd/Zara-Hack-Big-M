@@ -20,6 +20,11 @@ export async function getFriendAnalysis(friendId, analysisId) {
   return data
 }
 
+export async function getFriendLocations(friendId) {
+  const { data } = await apiClient.get(`/api/friends/${friendId}/locations`)
+  return data
+}
+
 export async function removeFriend(friendId) {
   await apiClient.delete(`/api/friends/${friendId}`)
 }

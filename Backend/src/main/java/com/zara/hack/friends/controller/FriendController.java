@@ -4,6 +4,7 @@ import com.zara.hack.analyze.controller.dto.AnalysisDetailDTO;
 import com.zara.hack.analyze.controller.dto.AnalysisSummaryDTO;
 import com.zara.hack.friends.controller.dto.FriendDTO;
 import com.zara.hack.friends.service.FriendService;
+import com.zara.hack.saved.controller.dto.ResSavedRegionDTO;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -48,6 +49,12 @@ public class FriendController {
                                                   @PathVariable Long friendId,
                                                   @PathVariable Long analysisId) {
         return friendService.getFriendAnalysisDetail(userId(jwt), friendId, analysisId);
+    }
+
+    @GetMapping("/{friendId}/locations")
+    public List<ResSavedRegionDTO> friendLocations(@AuthenticationPrincipal Jwt jwt,
+                                                   @PathVariable Long friendId) {
+        return friendService.getFriendSavedRegions(userId(jwt), friendId);
     }
 
     @DeleteMapping("/{friendId}")

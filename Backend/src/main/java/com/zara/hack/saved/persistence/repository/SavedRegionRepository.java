@@ -10,6 +10,8 @@ public interface SavedRegionRepository extends JpaRepository<SavedRegionEntity, 
 
     List<SavedRegionEntity> findAllByUserIdOrderByCreatedAtDesc(Long userId);
 
+    List<SavedRegionEntity> findAllByUserIdAndPublicSharedTrueOrderByCreatedAtDesc(Long userId);
+
     Optional<SavedRegionEntity> findByIdAndUserId(Long id, Long userId);
 
     List<SavedRegionEntity> findAllByAnalysisId(Long analysisId);
