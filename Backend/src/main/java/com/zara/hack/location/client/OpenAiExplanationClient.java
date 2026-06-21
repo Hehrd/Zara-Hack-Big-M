@@ -12,39 +12,39 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * xAI Grok integration that explains a top-ranked LSOA. Returns null on any
+ * OpenAI integration that explains a top-ranked LSOA. Returns null on any
  * failure (no key, network, rate limit) so the caller falls back to the
  * deterministic template explanation.
  */
 @Component
-public class GrokExplanationClient {
+public class OpenAiExplanationClient {
 
-    private static final Logger log = LoggerFactory.getLogger(GrokExplanationClient.class);
+    private static final Logger log = LoggerFactory.getLogger(OpenAiExplanationClient.class);
 
     private final LocationProperties properties;
     private final RestClient restClient;
 
-    public GrokExplanationClient(LocationProperties properties) {
+    public OpenAiExplanationClient(LocationProperties properties) {
         this.properties = properties;
         this.restClient = RestClient.builder().build();
     }
 
     public boolean isEnabled() {
-        return properties.grokEnabled();
+        return properties.openaiEnabled();
     }
 
     public String explain(LsoaScore score, String businessType) {
-        if (!properties.grokEnabled()) {
+        if (!properties.openaiEnabled()) {
             return null;
         }
         try {
             String prompt = buildPrompt(score, businessType);
             JsonNode body = restClient.post()
-                    .uri(properties.grokApiUrl())
-                    .header("Authorization", "Bearer " + properties.grokApiKey())
+                    .uri(properties.openaiApiUrl())
+                    .header("Authorization", "Bearer " + properties.openaiApiKey())
                     .header("Content-Type", "application/json")
                     .body(Map.of(
-                            "model", properties.grokModel(),
+                            "model", properties.openaiModel(),
                             "messages", List.of(
                                     Map.of("role", "system", "content",
                                             "You are a concise location analyst. Explain in 2-3 sentences why an "
@@ -63,7 +63,7 @@ public class GrokExplanationClient {
             }
             return text.trim();
         } catch (Exception ex) {
-            log.warn("Grok explanation failed for {}: {}", score.lsoaCode(), ex.getMessage());
+            log.warn("OpenAI explanation failed for {}: {}", score.lsoaCode(), ex.getMessage());
             return null;
         }
     }

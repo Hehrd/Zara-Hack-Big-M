@@ -7,6 +7,7 @@ import java.util.List;
 
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public record CombinedLocationResponse(
+        Long analysisId,
         String city,
         BusinessNeeds businessNeeds,
         List<DatasetCategory> selectedCategories,
@@ -15,4 +16,8 @@ public record CombinedLocationResponse(
         List<LsoaScore> rankedLocations,
         List<LocationExplanation> explanations
 ) {
+    public CombinedLocationResponse withAnalysisId(Long analysisId) {
+        return new CombinedLocationResponse(analysisId, city, businessNeeds, selectedCategories,
+                layerWeights, heatmapLayer, rankedLocations, explanations);
+    }
 }

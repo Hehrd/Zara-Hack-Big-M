@@ -42,33 +42,79 @@ public class GoogleMapsClient {
     }
 
     public List<GoogleMapsPoint> fetchPoints(String businessType, List<String> needs,
-                                             List<String> selectedCategoryIds, String city) {
+                                             List<String> selectedCategoryIds, String city,
+                                             JsonNode region) {
         List<GoogleMapsPoint> points = new ArrayList<>();
         if (!properties.googleMapsEnabled()) {
             log.info("Google Maps key not configured; skipping point layers");
             return points;
         }
+        // A drawn region restricts the search to its bounding box; otherwise the
+        // POC biases toward Greater London.
+        Map<String, Object> restriction = regionRectangle(region);
         if (selectedCategoryIds.contains("competitors")) {
-            points.addAll(textSearch("competitors", businessType + " in " + city, city));
+            points.addAll(textSearch("competitors", businessType + " in " + city, city, restriction));
         }
         if (selectedCategoryIds.contains("relevant_locations")) {
             String term = needs.isEmpty() ? businessType : needs.get(0);
-            points.addAll(textSearch("relevant_locations", term + " in " + city, city));
+            points.addAll(textSearch("relevant_locations", term + " in " + city, city, restriction));
         }
         return points;
     }
 
-    private List<GoogleMapsPoint> textSearch(String categoryId, String query, String city) {
-        String cacheKey = categoryId + "|" + query.toLowerCase();
+    /**
+     * Builds a Google Places {@code locationRestriction} rectangle from a GeoJSON
+     * Polygon's bounding box, or null when no valid region is supplied.
+     */
+    private Map<String, Object> regionRectangle(JsonNode region) {
+        if (region == null || !region.has("coordinates")) {
+            return null;
+        }
+        try {
+            double minLat = Double.POSITIVE_INFINITY, minLng = Double.POSITIVE_INFINITY;
+            double maxLat = Double.NEGATIVE_INFINITY, maxLng = Double.NEGATIVE_INFINITY;
+            // GeoJSON Polygon coordinates: [ [ [lng, lat], ... ] ]
+            for (JsonNode ring : region.get("coordinates")) {
+                for (JsonNode coord : ring) {
+                    double lng = coord.get(0).asDouble();
+                    double lat = coord.get(1).asDouble();
+                    minLat = Math.min(minLat, lat);
+                    maxLat = Math.max(maxLat, lat);
+                    minLng = Math.min(minLng, lng);
+                    maxLng = Math.max(maxLng, lng);
+                }
+            }
+            if (minLat > maxLat || minLng > maxLng) {
+                return null;
+            }
+            return Map.of("rectangle", Map.of(
+                    "low", Map.of("latitude", minLat, "longitude", minLng),
+                    "high", Map.of("latitude", maxLat, "longitude", maxLng)));
+        } catch (Exception ex) {
+            log.warn("Invalid region geometry; ignoring location restriction: {}", ex.getMessage());
+            return null;
+        }
+    }
+
+    private List<GoogleMapsPoint> textSearch(String categoryId, String query, String city,
+                                             Map<String, Object> regionRestriction) {
+        String cacheKey = categoryId + "|" + query.toLowerCase()
+                + (regionRestriction != null ? "|" + regionRestriction : "");
         List<GoogleMapsPoint> cached = cache.get(cacheKey);
         if (cached != null) {
             return cached;
         }
         List<GoogleMapsPoint> results = new ArrayList<>();
-        // Location bias improves precision; only London is calibrated for the POC.
-        Map<String, Object> requestBody = "London".equalsIgnoreCase(city)
-                ? Map.of("textQuery", query, "maxResultCount", 20, "locationBias", LONDON_BIAS)
-                : Map.of("textQuery", query, "maxResultCount", 20);
+        // A drawn region wins (tight restriction); else bias toward London for the POC.
+        Map<String, Object> requestBody;
+        if (regionRestriction != null) {
+            requestBody = Map.of("textQuery", query, "maxResultCount", 20,
+                    "locationRestriction", regionRestriction);
+        } else if ("London".equalsIgnoreCase(city)) {
+            requestBody = Map.of("textQuery", query, "maxResultCount", 20, "locationBias", LONDON_BIAS);
+        } else {
+            requestBody = Map.of("textQuery", query, "maxResultCount", 20);
+        }
         try {
             JsonNode body = restClient.post()
                     .uri("")

@@ -1,12 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
+import { getRouteApi, useNavigate } from '@tanstack/react-router'
 import { GoogleMapsOverlay } from '@deck.gl/google-maps'
 import { GeoJsonLayer } from '@deck.gl/layers'
-import { Building2, Compass, Eraser, Flag, LoaderCircle, MapPin, Rotate3D, Sparkles, Trophy, TrendingDown, TrendingUp } from 'lucide-react'
+import { Bookmark, BookmarkCheck, Building2, Compass, Eraser, Flag, GitCompareArrows, LoaderCircle, MapPin, Rotate3D, Sparkles, Trophy, TrendingDown, TrendingUp, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { loadGoogleMaps } from '@/lib/googleMaps'
 import { createLocationRecommendations } from '@/api/recommendations'
+import { useAnalysis } from '@/hooks/useAnalyses'
+import { useSaveRegion } from '@/hooks/useSavedRegions'
+
+const routeApi = getRouteApi('/maps')
 
 const LONDON_CENTER = { lat: 51.5074, lng: -0.1278 }
 
@@ -20,6 +25,13 @@ function pointInPolygon(point, polygon) {
     if (intersects) inside = !inside
   }
   return inside
+}
+
+// Closed GeoJSON Polygon ([lng, lat] order) for the backend's region filter.
+function pointsToGeoJsonPolygon(points) {
+  const ring = points.map((p) => [p.lng, p.lat])
+  ring.push([points[0].lng, points[0].lat])
+  return { type: 'Polygon', coordinates: [ring] }
 }
 
 // Diverging score ramp (low → high) over the deck.gl heatmap.
@@ -77,7 +89,7 @@ function zoomAlpha(zoom) {
   return Math.round(base - (base - min) * t)
 }
 
-function buildHeatmapLayer(featureCollection, is3D, zoom, selectedCode, onPick) {
+function buildHeatmapLayer(featureCollection, is3D, zoom, selectedCode, comparisonCodes, onPick) {
   const alpha = zoomAlpha(zoom)
   return new GeoJsonLayer({
     id: 'lsoa-heatmap',
@@ -96,9 +108,10 @@ function buildHeatmapLayer(featureCollection, is3D, zoom, selectedCode, onPick) 
     },
     getLineColor: (f) => {
       if (f.properties.lsoaCode === selectedCode) return [255, 255, 255, 255]
+      if (comparisonCodes.includes(f.properties.lsoaCode)) return [52, 211, 153, 255]
       return is3D ? [255, 255, 255, 0] : [255, 255, 255, 60]
     },
-    getLineWidth: (f) => (f.properties.lsoaCode === selectedCode ? 3 : is3D ? 0 : 0.5),
+    getLineWidth: (f) => (f.properties.lsoaCode === selectedCode || comparisonCodes.includes(f.properties.lsoaCode) ? 3 : is3D ? 0 : 0.5),
     lineWidthUnits: 'pixels',
     // A nonlinear scale creates distinct peaks instead of giving every area a
     // similarly tall wall. Keep a small base so low areas remain discoverable.
@@ -110,14 +123,15 @@ function buildHeatmapLayer(featureCollection, is3D, zoom, selectedCode, onPick) 
     onClick: (info) => onPick(info?.object?.properties ?? null),
     updateTriggers: {
       getFillColor: [alpha, is3D],
-      getLineColor: [selectedCode, is3D],
-      getLineWidth: [selectedCode, is3D],
+      getLineColor: [selectedCode, comparisonCodes, is3D],
+      getLineWidth: [selectedCode, comparisonCodes, is3D],
       getElevation: [is3D],
     },
   })
 }
 
 export function MapsPage() {
+  const navigate = useNavigate()
   const mapElement = useRef(null)
   const mapRef = useRef(null)
   const overlayRef = useRef(null)
@@ -128,6 +142,7 @@ export function MapsPage() {
   const polygonConstructorRef = useRef(null)
   const selectionPolygonRef = useRef(null)
   const polygonPathListenersRef = useRef([])
+  const openRegionMenuRef = useRef(null)
 
   const [mapError, setMapError] = useState('')
   const [is3D, setIs3D] = useState(false)
@@ -143,9 +158,18 @@ export function MapsPage() {
   const [submittedAreaPoints, setSubmittedAreaPoints] = useState([])
   const [requestedResultCount, setRequestedResultCount] = useState(3)
   const [submittedResultCount, setSubmittedResultCount] = useState(3)
+  const [comparisonAreas, setComparisonAreas] = useState([])
+  const [isComparisonOpen, setIsComparisonOpen] = useState(false)
+  const [regionContextMenu, setRegionContextMenu] = useState(null)
+
+  const { analysis: analysisParam } = routeApi.useSearch()
+  const storedAnalysis = useAnalysis(analysisParam)
+  const saveRegion = useSaveRegion()
+  const [savedCodes, setSavedCodes] = useState(() => new Set())
 
   const recommend = useMutation({ mutationFn: createLocationRecommendations })
-  const rawResult = recommend.data
+  const rawResult = recommend.data ?? storedAnalysis.data?.result ?? undefined
+  const analysisId = recommend.data?.analysis_id ?? storedAnalysis.data?.id ?? null
   const result = useMemo(() => {
     if (!rawResult || submittedAreaPoints.length < 3) return rawResult
     const contains = (area) => area.centroid && pointInPolygon(
@@ -185,15 +209,18 @@ export function MapsPage() {
 
   useEffect(() => {
     let active = true
+    let contextMenuHandler
+    const mapContainer = mapElement.current
+    if (!mapContainer) return undefined
     loadGoogleMaps()
       .then(({ Map, Polygon, mapsEvent }) => {
-        if (!active || !mapElement.current) return
+        if (!active) return
         mapsEventRef.current = mapsEvent
         polygonConstructorRef.current = Polygon
         // VECTOR routes through WebGLOverlayView, which Google disables without a valid
         // Map ID — leaving deck's canvas unsized and the heatmap invisible. Fall back to
         // RASTER unless a Map ID is configured (3D tilt also needs VECTOR + a Map ID).
-        mapRef.current = new Map(mapElement.current, {
+        mapRef.current = new Map(mapContainer, {
           center: LONDON_CENTER,
           zoom: 10,
           disableDefaultUI: true,
@@ -203,6 +230,15 @@ export function MapsPage() {
         })
         overlayRef.current = new GoogleMapsOverlay({ interleaved: false, layers: [] })
         overlayRef.current.setMap(mapRef.current)
+        contextMenuHandler = (event) => {
+          const bounds = mapContainer.getBoundingClientRect()
+          if (!overlayRef.current) return
+          const picked = overlayRef.current.pickObject({ x: event.clientX - bounds.left, y: event.clientY - bounds.top, radius: 4 })
+          if (!picked?.object?.properties) return
+          event.preventDefault()
+          openRegionMenuRef.current?.(picked.object.properties, event.clientX, event.clientY)
+        }
+        mapContainer.addEventListener('contextmenu', contextMenuHandler, true)
         zoomListenerRef.current = mapsEvent.addListener(mapRef.current, 'zoom_changed', () => {
           setZoom(mapRef.current.getZoom())
         })
@@ -246,14 +282,15 @@ export function MapsPage() {
       zoomListenerRef.current?.remove()
       polygonPathListenersRef.current.forEach((listener) => listener.remove())
       selectionPolygonRef.current?.setMap(null)
+      if (contextMenuHandler) mapContainer.removeEventListener('contextmenu', contextMenuHandler, true)
       overlayRef.current?.setMap(null)
     }
   }, [mapId])
 
   useEffect(() => {
     if (!overlayRef.current || !visibleFeatureCollection) return
-    overlayRef.current.setProps({ layers: [buildHeatmapLayer(visibleFeatureCollection, is3D, zoom, selected?.lsoaCode, setSelected)] })
-  }, [visibleFeatureCollection, is3D, zoom, selected])
+    overlayRef.current.setProps({ layers: [buildHeatmapLayer(visibleFeatureCollection, is3D, zoom, selected?.lsoaCode, comparisonAreas.map((area) => area.lsoa_code), setSelected)] })
+  }, [visibleFeatureCollection, is3D, zoom, selected, comparisonAreas])
 
   useEffect(() => {
     const ranked = result?.ranked_locations ?? []
@@ -269,15 +306,17 @@ export function MapsPage() {
     const trimmedDescription = description.trim()
     if (!trimmedCity || !trimmedDescription) return
     setSelected(null)
+    setComparisonAreas([])
+    setIsComparisonOpen(false)
     setMinimumScore(null)
     setSubmittedAreaPoints(areaMode === 'custom' ? customPoints : [])
-    const area = areaMode === 'custom'
-      ? { type: 'polygon', label: 'Custom map area', points: customPoints }
-      : { type: 'city', label: trimmedCity }
+    const region = areaMode === 'custom' && customPoints.length >= 3
+      ? pointsToGeoJsonPolygon(customPoints)
+      : undefined
     const resultCount = Math.max(1, Math.min(20, Number(requestedResultCount) || 1))
     setRequestedResultCount(resultCount)
     setSubmittedResultCount(resultCount)
-    recommend.mutate({ city: trimmedCity, area, businessDescription: trimmedDescription, requestedResultCount: resultCount })
+    recommend.mutate({ city: trimmedCity, region, businessDescription: trimmedDescription, requestedResultCount: resultCount })
     if (areaMode === 'custom') clearCustomArea()
   }
 
@@ -342,9 +381,42 @@ export function MapsPage() {
     mapRef.current.setZoom(14)
   }
 
+  function toggleComparisonArea(location) {
+    const code = location.lsoa_code ?? location.lsoaCode
+    const fullLocation = result?.heatmap_layer?.find((area) => area.lsoa_code === code) ?? location
+    setIsComparisonOpen(true)
+    setComparisonAreas((current) => {
+      if (current.some((area) => area.lsoa_code === code)) return current.filter((area) => area.lsoa_code !== code)
+      return [...current, fullLocation]
+    })
+  }
+
+  function openComparison() {
+    if (comparisonAreas.length < 2) return
+    sessionStorage.setItem('locus-region-comparison', JSON.stringify({
+      areas: comparisonAreas,
+      categories: result?.selected_categories ?? [],
+      businessType: result?.business_needs?.business_type ?? '',
+    }))
+    navigate({ to: '/compare' })
+  }
+
+  openRegionMenuRef.current = (location, x, y) => {
+    const code = location.lsoa_code ?? location.lsoaCode
+    const fullLocation = result?.heatmap_layer?.find((area) => area.lsoa_code === code) ?? location
+    setRegionContextMenu({
+      x: Math.max(8, Math.min(x, window.innerWidth - 232)),
+      y: Math.max(8, Math.min(y, window.innerHeight - 150)),
+      location: fullLocation,
+    })
+  }
+
   function clearMap() {
     recommend.reset()
     setSelected(null)
+    setSavedCodes(new Set())
+    setComparisonAreas([])
+    setIsComparisonOpen(false)
     setMinimumScore(null)
     setSubmittedAreaPoints([])
     clearCustomArea()
@@ -361,9 +433,36 @@ export function MapsPage() {
   const explanationFor = (code) => result?.explanations?.find((e) => e.lsoa_code === code)
   const selectedExplanation = selected ? explanationFor(selected.lsoaCode) : null
 
+  function handleSaveRegion(region) {
+    if (!analysisId || !region) return
+    saveRegion.mutate(
+      { analysisId, lsoaCode: region.lsoaCode },
+      { onSuccess: () => setSavedCodes((prev) => new Set(prev).add(region.lsoaCode)) },
+    )
+  }
+
   return (
     <div className="relative h-[calc(100vh-4rem)] min-h-[680px] overflow-hidden lg:h-screen">
       <div ref={mapElement} className="absolute inset-0 bg-[#dfe5dc]" aria-label="Locus opportunity map" />
+      {regionContextMenu && <>
+        <button type="button" className="fixed inset-0 z-40 cursor-default" onClick={() => setRegionContextMenu(null)} aria-label="Close region menu" />
+        <div className="fixed z-50 w-56 overflow-hidden rounded-xl border bg-white p-1.5 text-sm shadow-2xl" style={{ left: regionContextMenu.x, top: regionContextMenu.y }} role="menu">
+          <div className="border-b px-2.5 py-2"><p className="truncate text-xs font-semibold">{regionContextMenu.location.lsoa_name ?? regionContextMenu.location.lsoaName}</p><p className="mt-0.5 text-[10px] text-muted-foreground">{regionContextMenu.location.lsoa_code ?? regionContextMenu.location.lsoaCode}</p></div>
+          <button type="button" role="menuitem" className="mt-1 flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs hover:bg-muted" onClick={() => { toggleComparisonArea(regionContextMenu.location); setRegionContextMenu(null) }}><GitCompareArrows className="size-4 text-emerald-700" />{comparisonAreas.some((area) => area.lsoa_code === (regionContextMenu.location.lsoa_code ?? regionContextMenu.location.lsoaCode)) ? 'Remove from compare' : 'Add to compare'}</button>
+          {(() => {
+            const code = regionContextMenu.location.lsoa_code ?? regionContextMenu.location.lsoaCode
+            const isSaved = savedCodes.has(code)
+            const isSaving = saveRegion.isPending && saveRegion.variables?.lsoaCode === code
+            return (
+              <button type="button" role="menuitem" className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50" disabled={!analysisId || isSaved || isSaving} onClick={() => { handleSaveRegion({ lsoaCode: code }); setRegionContextMenu(null) }}>
+                {isSaved ? <BookmarkCheck className="size-4 text-emerald-700" /> : <Bookmark className="size-4 text-emerald-700" />}
+                {isSaved ? 'Saved' : isSaving ? 'Saving…' : 'Save region'}
+                {!analysisId && !isSaved && <span className="ml-auto text-[9px] uppercase tracking-wide text-muted-foreground">Run first</span>}
+              </button>
+            )
+          })()}
+        </div>
+      </>}
       {isTransitioning && <div className="absolute inset-0 z-30 grid place-items-center bg-slate-950/10 backdrop-blur-[1px]" role="status" aria-live="polite"><div className="flex items-center gap-3 rounded-2xl border border-white/80 bg-white/95 px-5 py-3.5 shadow-xl"><span className="grid size-9 place-items-center rounded-xl bg-emerald-50 text-emerald-700"><LoaderCircle className="size-5 animate-spin" /></span><div><p className="text-sm font-semibold">Switching to {transitionTarget} view</p><p className="mt-0.5 text-xs text-muted-foreground">Preparing the opportunity surface…</p></div></div></div>}
       {mapError && <div role="alert" className="absolute left-1/2 top-8 z-20 w-[min(90%,520px)] -translate-x-1/2 rounded-2xl border border-destructive/30 bg-white p-4 text-sm text-destructive shadow-xl">{mapError}</div>}
 
@@ -416,8 +515,16 @@ export function MapsPage() {
 
         {!result && !recommend.isPending && <div className="mt-6 rounded-2xl bg-[#f3f6f1] p-4"><div className="flex items-center gap-2 text-sm font-medium"><Sparkles className="size-4 text-emerald-700" /> What happens next</div><p className="mt-2 text-xs leading-5 text-muted-foreground">The backend scores every area, returns a ranked surface, and Locus colors the map. Click any area to inspect its score.</p></div>}
 
-        {result && <ResultPanel result={result} selected={selected} selectedExplanation={selectedExplanation} explanationFor={explanationFor} onLocationSelect={showRankedLocation} />}
+        {result && <ResultPanel result={result} selected={selected} selectedExplanation={selectedExplanation} explanationFor={explanationFor} onLocationSelect={showRankedLocation} canSave={analysisId != null} onSaveRegion={handleSaveRegion} savedCodes={savedCodes} savingCode={saveRegion.isPending ? saveRegion.variables?.lsoaCode : null} />}
       </aside>
+
+      {result && (isComparisonOpen ? <div className="absolute right-4 top-32 z-20 w-72 rounded-2xl border bg-slate-950 p-4 text-white shadow-xl lg:right-6">
+        <div className="flex items-center justify-between"><p className="flex items-center gap-2 text-sm font-semibold"><GitCompareArrows className="size-4 text-emerald-400" /> Compare regions</p><button type="button" className="rounded-lg p-1 text-white/55 hover:bg-white/10 hover:text-white" onClick={() => setIsComparisonOpen(false)} aria-label="Close comparison tray"><X className="size-4" /></button></div>
+        <p className="mt-1 text-[11px] text-white/55">Right-click any region to add or remove it.</p>
+        {comparisonAreas.length === 0 ? <p className="mt-3 rounded-xl border border-dashed border-white/15 p-3 text-center text-xs text-white/45">No regions selected</p> : <div className="mt-3 space-y-2">{comparisonAreas.map((area, index) => <div key={area.lsoa_code} className="flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2"><span className="grid size-5 shrink-0 place-items-center rounded-full bg-emerald-400 text-[10px] font-bold text-slate-950">{index + 1}</span><span className="min-w-0 flex-1 truncate text-xs">{area.lsoa_name ?? area.lsoaName}</span><button type="button" className="rounded p-1 text-white/60 hover:bg-white/10 hover:text-white" onClick={() => toggleComparisonArea(area)} aria-label={`Remove ${area.lsoa_name ?? area.lsoaName} from comparison`}><X className="size-3.5" /></button></div>)}</div>}
+        <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-3 text-[11px]"><span className="text-white/50">{comparisonAreas.length} selected</span><span className={comparisonAreas.length >= 2 ? 'font-medium text-emerald-400' : 'text-white/40'}>{comparisonAreas.length >= 2 ? 'Ready to compare' : 'Select at least 2'}</span></div>
+        <Button type="button" size="sm" className="mt-3 w-full bg-emerald-400 text-slate-950 hover:bg-emerald-300" disabled={comparisonAreas.length < 2} onClick={openComparison}><GitCompareArrows /> Compare {comparisonAreas.length || ''} regions</Button>
+      </div> : <Button type="button" size="sm" className="absolute right-4 top-32 z-20 shadow-lg lg:right-6" onClick={() => setIsComparisonOpen(true)}><GitCompareArrows /> {comparisonAreas.length ? `Compare ${comparisonAreas.length}` : 'Compare regions'}</Button>)}
 
       {result && (
         <div className="absolute bottom-[calc(72%+24px)] right-4 z-20 w-56 rounded-2xl border bg-white/94 p-3 text-xs shadow-lg backdrop-blur lg:bottom-6 lg:right-6">
@@ -440,7 +547,7 @@ export function MapsPage() {
   )
 }
 
-function ResultPanel({ result, selected, selectedExplanation, explanationFor, onLocationSelect }) {
+function ResultPanel({ result, selected, selectedExplanation, explanationFor, onLocationSelect, canSave, onSaveRegion, savedCodes, savingCode }) {
   return (
     <div className="mt-6 space-y-5 border-t pt-5">
       <div>
@@ -459,6 +566,15 @@ function ResultPanel({ result, selected, selectedExplanation, explanationFor, on
         <div className="rounded-2xl border bg-white p-4">
           <div className="flex items-center justify-between gap-2"><div><p className="text-sm font-semibold">{selected.lsoaName}</p><p className="text-[11px] text-muted-foreground">{selected.lsoaCode}</p></div><span className="flex items-center gap-1 rounded-full bg-slate-900 px-2.5 py-1 text-[10px] font-semibold text-white"><Flag className="size-3" /> {Number(selected.score).toFixed(3)}</span></div>
           {selectedExplanation && <p className="mt-3 border-t pt-3 text-[11px] leading-5 text-slate-700">{selectedExplanation.explanation}</p>}
+          {canSave && (() => {
+            const isSaved = savedCodes?.has(selected.lsoaCode)
+            const isSaving = savingCode === selected.lsoaCode
+            return (
+              <Button type="button" size="sm" variant={isSaved ? 'outline' : 'default'} className="mt-3 w-full" disabled={isSaved || isSaving} onClick={() => onSaveRegion(selected)}>
+                {isSaved ? <><BookmarkCheck className="size-4" /> Saved</> : isSaving ? <><LoaderCircle className="size-4 animate-spin" /> Saving…</> : <><Bookmark className="size-4" /> Save region</>}
+              </Button>
+            )
+          })()}
         </div>
       )}
 
@@ -468,13 +584,8 @@ function ResultPanel({ result, selected, selectedExplanation, explanationFor, on
           const explanation = explanationFor(loc.lsoa_code)
           const weights = Object.entries(loc.weighted_layer_values || {}).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
           return (
-            <button
-              key={loc.lsoa_code}
-              type="button"
-              className={`w-full rounded-2xl border bg-white p-4 text-left transition hover:border-emerald-400 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${selected?.lsoaCode === loc.lsoa_code ? 'border-emerald-500 ring-2 ring-emerald-500/20' : ''}`}
-              onClick={() => onLocationSelect(loc)}
-              aria-label={`Show ${loc.lsoa_name} on the map`}
-            >
+            <div key={loc.lsoa_code} className={`rounded-2xl border bg-white p-4 transition hover:border-emerald-400 hover:shadow-md ${selected?.lsoaCode === loc.lsoa_code ? 'border-emerald-500 ring-2 ring-emerald-500/20' : ''}`}>
+              <button type="button" className="w-full text-left focus-visible:outline-none" onClick={() => onLocationSelect(loc)} aria-label={`Show ${loc.lsoa_name} on the map`}>
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <p className="text-sm font-semibold">#{index + 1} · {loc.lsoa_name}</p>
@@ -501,7 +612,8 @@ function ResultPanel({ result, selected, selectedExplanation, explanationFor, on
                   <span className={`mt-2 inline-block rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${explanation.provider?.includes('Grok') ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-600'}`}>{explanation.provider}</span>
                 </div>
               )}
-            </button>
+              </button>
+            </div>
           )
         })}
       </div>

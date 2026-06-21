@@ -10,8 +10,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * Deterministic explanation generator used for every top-3 LSOA when the xAI
- * Grok call is unavailable, fails, or is rate-limited. The spec keeps this
+ * Deterministic explanation generator used for every top-3 LSOA when the
+ * OpenAI call is unavailable, fails, or is rate-limited. The spec keeps this
  * fallback enabled at all times.
  */
 @Component

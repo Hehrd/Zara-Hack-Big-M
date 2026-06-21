@@ -6,9 +6,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record LocationProperties(
         String modelServiceUrl,
         String googleMapsApiKey,
-        String grokApiKey,
-        String grokApiUrl,
-        String grokModel,
+        String openaiApiKey,
+        String openaiApiUrl,
+        String openaiModel,
         String sparkSubmitPath,
         String sparkJobPath,
         String precomputedLayersPath,
@@ -18,8 +18,8 @@ public record LocationProperties(
         String runDir,
         Integer requestedResultCount
 ) {
-    public boolean grokEnabled() {
-        return grokApiKey != null && !grokApiKey.isBlank();
+    public boolean openaiEnabled() {
+        return openaiApiKey != null && !openaiApiKey.isBlank();
     }
 
     public boolean googleMapsEnabled() {
