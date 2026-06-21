@@ -4,6 +4,7 @@ import com.zara.hack.analyze.service.AnalysisService;
 import com.zara.hack.analyze.controller.dto.AnalysisDetailDTO;
 import com.zara.hack.analyze.controller.dto.AnalysisSummaryDTO;
 import com.zara.hack.analyze.controller.dto.ReqAnalysisDTO;
+import com.zara.hack.analyze.controller.dto.ReqRescoreDTO;
 import com.zara.hack.analyze.controller.dto.ResAnalysisDTO;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -46,6 +47,13 @@ public class AnalysisController {
     @GetMapping("/{id}")
     public AnalysisDetailDTO getAnalysis(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id) {
         return analysisService.getAnalysisDetail(userId(jwt), id);
+    }
+
+    @PostMapping("/{id}/rescore")
+    public AnalysisDetailDTO rescore(@AuthenticationPrincipal Jwt jwt,
+                                     @PathVariable Long id,
+                                     @Valid @RequestBody ReqRescoreDTO request) {
+        return analysisService.rescoreAnalysis(userId(jwt), id, request);
     }
 
     @PutMapping("/{id}")

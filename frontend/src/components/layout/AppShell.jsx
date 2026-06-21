@@ -1,4 +1,4 @@
-import { BarChart3, Compass, LogOut, Menu, Plus, UserRound, X } from 'lucide-react'
+import { BarChart3, Compass, LogOut, Menu, Plus, Settings, Users, UserRound, X } from 'lucide-react'
 import { Link, Outlet, useRouterState } from '@tanstack/react-router'
 import { LocusLogo } from '@/components/LocusLogo'
 import { Button } from '@/components/ui/button'
@@ -12,11 +12,14 @@ import { useNavigate } from '@tanstack/react-router'
 const productLinks = [
   { to: '/dashboard', label: 'Dashboard', icon: BarChart3 },
   { to: '/maps', label: 'Explore', icon: Compass },
+  { to: '/friends', label: 'Friends', icon: Users },
+  { to: '/settings', label: 'Settings', icon: Settings },
 ]
 
 export function AppShell() {
   const pathname = useRouterState({ select: (state) => state.location.pathname })
   const isPublic = pathname === '/' || pathname === '/login' || pathname === '/register'
+    || pathname.startsWith('/api/add-friend')
 
   return isPublic ? <PublicShell isHome={pathname === '/'} /> : <ProductShell />
 }
