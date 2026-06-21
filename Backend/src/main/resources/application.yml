@@ -35,6 +35,7 @@ app:
   location:
     model-service-url: ${APP_LOCATION_MODEL_SERVICE_URL:http://localhost:8000}
     google-maps-api-key: ${APP_LOCATION_GOOGLE_MAPS_KEY:}
+    google-maps-referer: ${APP_LOCATION_GOOGLE_MAPS_REFERER:}
     openai-api-key: ${APP_LOCATION_OPENAI_KEY:}
     openai-api-url: ${APP_LOCATION_OPENAI_URL:https://proxy.openkbs.com/v1/openai/chat/completions}
     openai-model: ${APP_LOCATION_OPENAI_MODEL:gpt-5.4-mini}

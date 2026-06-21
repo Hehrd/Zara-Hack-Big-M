@@ -118,9 +118,18 @@ public class GoogleMapsClient {
         try {
             JsonNode body = restClient.post()
                     .uri("")
-                    .header("Content-Type", "application/json")
-                    .header("X-Goog-Api-Key", properties.googleMapsApiKey())
-                    .header("X-Goog-FieldMask", "places.id,places.displayName,places.location")
+                    .headers(headers -> {
+                        headers.set("Content-Type", "application/json");
+                        headers.set("X-Goog-Api-Key", properties.googleMapsApiKey());
+                        headers.set("X-Goog-FieldMask", "places.id,places.displayName,places.location");
+                        // The provisioned key is HTTP-referrer restricted (browser key).
+                        // Server-side calls send no Referer and are rejected, so supply
+                        // the allowed origin explicitly when configured.
+                        String referer = properties.googleMapsReferer();
+                        if (referer != null && !referer.isBlank()) {
+                            headers.set("Referer", referer);
+                        }
+                    })
                     .body(requestBody)
                     .retrieve()
                     .body(JsonNode.class);

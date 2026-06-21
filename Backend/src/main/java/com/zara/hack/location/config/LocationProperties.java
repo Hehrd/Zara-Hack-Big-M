@@ -6,6 +6,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record LocationProperties(
         String modelServiceUrl,
         String googleMapsApiKey,
+        String googleMapsReferer,
         String openaiApiKey,
         String openaiApiUrl,
         String openaiModel,
