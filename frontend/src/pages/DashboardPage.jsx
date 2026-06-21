@@ -24,6 +24,12 @@ function formatDate(value) {
   return new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+function updateErrorMessage(error, fallback = 'Could not update.') {
+  return error?.response?.status === 401
+    ? 'Session expired — please log in again.'
+    : fallback
+}
+
 export function DashboardPage() {
   const analyses = useAnalyses()
   const savedRegions = useSavedRegions()
@@ -68,7 +74,7 @@ export function DashboardPage() {
 
         <div className="mt-7 grid gap-5 lg:grid-cols-2">
           <motion.div variants={reveal}><RecentAnalysesPanel query={analyses} /></motion.div>
-          <motion.div variants={reveal}><SavedLocationsPanel query={savedRegions} /></motion.div>
+          <motion.div variants={reveal}><SavedLocationsPanel query={savedRegions} analyses={analyses.data} /></motion.div>
         </div>
       </motion.div>
     </div>
@@ -237,6 +243,7 @@ function RecentAnalysesPanel({ query }) {
 
 function AnalysisCard({ analysis }) {
   const visibility = useUpdateAnalysisVisibility()
+  const visibilityError = visibility.isError ? updateErrorMessage(visibility.error) : null
 
   return (
     <motion.li whileHover={{ y: -3 }} transition={{ type: 'spring', stiffness: 360, damping: 24 }}>
@@ -259,14 +266,14 @@ function AnalysisCard({ analysis }) {
             pending={visibility.isPending}
             onToggle={(next) => visibility.mutate({ id: analysis.id, publicShared: next })}
           />
-          {visibility.isError && <span className="text-[10px] text-destructive">Could not update.</span>}
+          {visibilityError && <span className="text-[10px] text-destructive">{visibilityError}</span>}
         </div>
       </div>
     </motion.li>
   )
 }
 
-function SavedLocationsPanel({ query }) {
+function SavedLocationsPanel({ query, analyses }) {
   const { data, isLoading, isError } = query
   return (
     <Panel icon={Bookmark} title="Saved locations" count={data?.length}>
@@ -275,7 +282,11 @@ function SavedLocationsPanel({ query }) {
       {!isLoading && !isError && (data?.length ? (
         <ul className="space-y-3">
           {data.map((region) => (
-            <SavedRegionCard key={region.id} region={region} />
+            <SavedRegionCard
+              key={region.id}
+              region={region}
+              parentAnalysis={analyses?.find((analysis) => analysis.id === region.analysis_id)}
+            />
           ))}
         </ul>
       ) : (
@@ -285,10 +296,11 @@ function SavedLocationsPanel({ query }) {
   )
 }
 
-function SavedRegionCard({ region }) {
+function SavedRegionCard({ region, parentAnalysis }) {
   const update = useUpdateSavedRegion()
   const remove = useDeleteSavedRegion()
   const visibility = useUpdateSavedRegionVisibility()
+  const analysisVisibility = useUpdateAnalysisVisibility()
   const [editing, setEditing] = useState(false)
   const [notes, setNotes] = useState(region.notes ?? '')
 
@@ -301,10 +313,20 @@ function SavedRegionCard({ region }) {
     update.mutate({ id: region.id, notes: notes.trim() || null }, { onSuccess: () => setEditing(false) })
   }
 
+  function makeAnalysisAndLocationPublic() {
+    analysisVisibility.mutate(
+      { id: region.analysis_id, publicShared: true },
+      {
+        onSuccess: () => visibility.mutate({ id: region.id, publicShared: true }),
+      },
+    )
+  }
+
   const visibilityError = visibility.isError
-    ? (visibility.error?.response?.status === 409
-        ? 'Make the analysis public first.'
-        : 'Could not update.')
+    ? updateErrorMessage(
+        visibility.error,
+        visibility.error?.response?.status === 409 ? 'Make the analysis public first.' : 'Could not update.',
+      )
     : null
 
   return (
@@ -325,14 +347,27 @@ function SavedRegionCard({ region }) {
         <>
           {region.notes && <p className="mt-3 text-[12px] leading-5 text-[#4f5d55]">{region.notes}</p>}
           <div className="mt-3 flex items-center gap-2 border-t border-[#173f31]/8 pt-3">
-            <VisibilityToggle
-              isPublic={region.public_shared}
-              pending={visibility.isPending}
-              onToggle={(next) => visibility.mutate({ id: region.id, publicShared: next })}
-            />
+            {!region.public_shared && parentAnalysis?.public_shared === false ? (
+              <Button
+                type="button"
+                size="xs"
+                variant="outline"
+                disabled={analysisVisibility.isPending || visibility.isPending}
+                onClick={makeAnalysisAndLocationPublic}
+              >
+                Make analysis + location public
+              </Button>
+            ) : (
+              <VisibilityToggle
+                isPublic={region.public_shared}
+                pending={visibility.isPending}
+                onToggle={(next) => visibility.mutate({ id: region.id, publicShared: next })}
+              />
+            )}
             {visibilityError && <span className="text-[10px] text-destructive">{visibilityError}</span>}
+            {analysisVisibility.isError && <span className="text-[10px] text-destructive">{updateErrorMessage(analysisVisibility.error)}</span>}
             <div className="ml-auto flex items-center gap-1">
-              <Link to="/maps" search={{ analysis: region.analysis_id }} className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 hover:underline">
+              <Link to="/maps" search={{ analysis: region.analysis_id, region: region.lsoa_code }} className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 hover:underline">
                 View <ArrowRight className="size-3" />
               </Link>
               <Button type="button" size="xs" variant="ghost" onClick={startEditing}><Pencil className="size-3.5" /> Edit</Button>

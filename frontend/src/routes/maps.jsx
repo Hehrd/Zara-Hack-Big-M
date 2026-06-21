@@ -5,5 +5,6 @@ export const Route = createFileRoute('/maps')({
   component: MapsPage,
   validateSearch: (search) => ({
     analysis: search.analysis != null ? Number(search.analysis) : undefined,
+    region: typeof search.region === 'string' && search.region ? search.region : undefined,
   }),
 })

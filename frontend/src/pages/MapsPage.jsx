@@ -178,6 +178,7 @@ export function MapsPage() {
   const openRegionMenuRef = useRef(null)
 
   const [mapError, setMapError] = useState('')
+  const [mapReady, setMapReady] = useState(false)
   const [is3D, setIs3D] = useState(false)
   const [isTransitioning, setIsTransitioning] = useState(false)
   const [transitionTarget, setTransitionTarget] = useState(null)
@@ -198,7 +199,7 @@ export function MapsPage() {
   const [isPanelOpen, setIsPanelOpen] = useState(true)
   const reduceMotion = useReducedMotion()
 
-  const { analysis: analysisParam } = routeApi.useSearch()
+  const { analysis: analysisParam, region: regionParam } = routeApi.useSearch()
   const storedAnalysis = useAnalysis(analysisParam)
   const saveRegion = useSaveRegion()
   const rescore = useRescoreAnalysis()
@@ -277,6 +278,7 @@ export function MapsPage() {
           gestureHandling: 'greedy',
           ...(mapId ? { mapId, renderingType: 'VECTOR' } : { renderingType: 'RASTER' }),
         })
+        setMapReady(true)
         overlayRef.current = new GoogleMapsOverlay({ interleaved: false, layers: [] })
         overlayRef.current.setMap(mapRef.current)
         contextMenuHandler = (event) => {
@@ -327,6 +329,7 @@ export function MapsPage() {
       .catch((error) => active && setMapError(error.message))
     return () => {
       active = false
+      setMapReady(false)
       cameraTransitionListenerRef.current?.remove()
       if (scoreTransitionFrameRef.current !== null) cancelAnimationFrame(scoreTransitionFrameRef.current)
       zoomListenerRef.current?.remove()
@@ -351,6 +354,12 @@ export function MapsPage() {
       mapRef.current.setZoom(12)
     }
   }, [featureCollection, result])
+
+  useEffect(() => {
+    if (!regionParam || !mapReady) return
+    const location = result?.heatmap_layer?.find((area) => area.lsoa_code === regionParam)
+    if (location) showRankedLocation(location)
+  }, [regionParam, result, mapReady])
 
   function handleSubmit(event) {
     event.preventDefault()

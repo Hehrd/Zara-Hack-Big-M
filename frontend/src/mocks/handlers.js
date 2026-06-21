@@ -43,10 +43,42 @@ function tokenPair(email) {
   }
 }
 
-let nextAnalysisId = 1
-let nextSavedRegionId = 1
-const mockAnalyses = []
-const mockSavedRegions = []
+let nextAnalysisId = 2
+let nextSavedRegionId = 3
+const mockAnalyses = [
+  {
+    id: 1,
+    city: 'London',
+    business_description: 'A cozy independent specialty coffee shop',
+    requested_result_count: 3,
+    region: null,
+    result: locationRecommendations,
+    public_shared: false,
+    created_at: '2026-06-20T09:30:00.000Z',
+  },
+]
+const mockSavedRegions = [
+  {
+    id: 1,
+    analysis_id: 1,
+    lsoa_code: locationRecommendations.heatmap_layer[0].lsoa_code,
+    notes: 'Strong footfall and a promising mix of nearby amenities.',
+    tags: ['high potential', 'coffee shop'],
+    public_shared: false,
+    created_at: '2026-06-20T10:15:00.000Z',
+    updated_at: '2026-06-20T10:15:00.000Z',
+  },
+  {
+    id: 2,
+    analysis_id: 1,
+    lsoa_code: locationRecommendations.heatmap_layer[1].lsoa_code,
+    notes: 'Worth visiting to assess the competition in person.',
+    tags: ['shortlist', 'site visit'],
+    public_shared: false,
+    created_at: '2026-06-20T10:20:00.000Z',
+    updated_at: '2026-06-20T10:20:00.000Z',
+  },
+]
 
 function normalizeTags(tags) {
   return Array.isArray(tags) ? tags.map((tag) => String(tag).trim()).filter(Boolean) : []
@@ -93,6 +125,7 @@ function toAnalysisSummary(analysis) {
     city: analysis.city,
     business_description: analysis.business_description,
     requested_result_count: analysis.requested_result_count,
+    public_shared: analysis.public_shared ?? false,
     created_at: analysis.created_at,
   }
 }
@@ -114,6 +147,7 @@ function savedRegionResponse(savedRegion) {
     requested_result_count: analysis?.requested_result_count ?? 3,
     notes: savedRegion.notes ?? null,
     tags: savedRegion.tags,
+    public_shared: savedRegion.public_shared ?? false,
     created_at: savedRegion.created_at,
     updated_at: savedRegion.updated_at,
   }
@@ -205,6 +239,22 @@ export const handlers = [
     if (!analysis) return authError(404, 'Not Found', 'Analysis not found', `/api/analyze/${params.id}`)
     return HttpResponse.json(analysis)
   }),
+  http.put('*/api/analyze/:id/visibility', async ({ params, request }) => {
+    const analysis = mockAnalyses.find((item) => item.id === Number(params.id))
+    if (!analysis) return authError(404, 'Not Found', 'Analysis not found', `/api/analyze/${params.id}/visibility`)
+
+    const body = await request.json()
+    analysis.public_shared = Boolean(body.public_shared)
+
+    // Private analyses cannot expose individual saved regions.
+    if (!analysis.public_shared) {
+      mockSavedRegions
+        .filter((item) => item.analysis_id === analysis.id)
+        .forEach((item) => { item.public_shared = false })
+    }
+
+    return HttpResponse.json(analysis)
+  }),
   http.get('*/api/saved-regions', () => HttpResponse.json([...mockSavedRegions.map(savedRegionResponse)].reverse())),
   http.post('*/api/saved-regions', async ({ request }) => {
     const body = await request.json()
@@ -227,6 +277,7 @@ export const handlers = [
       lsoa_code: lsoaCode,
       notes: body.notes || null,
       tags: normalizeTags(body.tags),
+      public_shared: false,
       created_at: now,
       updated_at: now,
     }
@@ -243,6 +294,22 @@ export const handlers = [
     savedRegion.tags = normalizeTags(body.tags)
     savedRegion.updated_at = new Date().toISOString()
 
+    return HttpResponse.json(savedRegionResponse(savedRegion))
+  }),
+  http.put('*/api/saved-regions/:id/visibility', async ({ params, request }) => {
+    const savedRegion = mockSavedRegions.find((item) => item.id === Number(params.id))
+    if (!savedRegion) return authError(404, 'Not Found', 'Saved region not found', `/api/saved-regions/${params.id}/visibility`)
+
+    const body = await request.json()
+    const publicShared = Boolean(body.public_shared)
+    const analysis = mockAnalyses.find((item) => item.id === savedRegion.analysis_id)
+
+    if (publicShared && !analysis?.public_shared) {
+      return authError(409, 'Conflict', 'Make the analysis public before sharing this region', `/api/saved-regions/${params.id}/visibility`)
+    }
+
+    savedRegion.public_shared = publicShared
+    savedRegion.updated_at = new Date().toISOString()
     return HttpResponse.json(savedRegionResponse(savedRegion))
   }),
   http.delete('*/api/saved-regions/:id', ({ params }) => {

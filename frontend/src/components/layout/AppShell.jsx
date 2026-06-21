@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store/appStore'
 import { logOut } from '@/api/auth'
 import { clearAuthSession, getAuthSession } from '@/api/authSession'
+import { queryClient } from '@/api/queryClient'
 import { useEffect } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 
@@ -18,8 +19,21 @@ const productLinks = [
 
 export function AppShell() {
   const pathname = useRouterState({ select: (state) => state.location.pathname })
+  const setUser = useAppStore((state) => state.setUser)
+  const navigate = useNavigate()
   const isPublic = pathname === '/' || pathname === '/login' || pathname === '/register'
     || pathname.startsWith('/api/add-friend')
+
+  useEffect(() => {
+    const handleExpired = () => {
+      clearAuthSession()
+      queryClient.clear()
+      setUser(null)
+      navigate({ to: '/login', replace: true })
+    }
+    window.addEventListener('auth:expired', handleExpired)
+    return () => window.removeEventListener('auth:expired', handleExpired)
+  }, [navigate, setUser])
 
   return isPublic ? <PublicShell isHome={pathname === '/'} /> : <ProductShell />
 }
@@ -49,9 +63,6 @@ function ProductShell() {
 
   useEffect(() => {
     if (!user) navigate({ to: '/login', replace: true })
-    const handleExpired = () => { setUser(null); navigate({ to: '/login', replace: true }) }
-    window.addEventListener('auth:expired', handleExpired)
-    return () => window.removeEventListener('auth:expired', handleExpired)
   }, [navigate, setUser, user])
 
   async function handleLogout() {
