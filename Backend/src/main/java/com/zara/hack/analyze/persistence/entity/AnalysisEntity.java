@@ -56,6 +56,9 @@ public class AnalysisEntity {
     @Column(columnDefinition = "text")
     private String result;
 
+    @Column(nullable = false)
+    private boolean publicShared = false;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 

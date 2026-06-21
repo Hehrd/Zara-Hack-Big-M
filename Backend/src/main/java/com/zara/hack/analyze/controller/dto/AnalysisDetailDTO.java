@@ -14,6 +14,7 @@ public record AnalysisDetailDTO(
         Integer requestedResultCount,
         JsonNode region,
         JsonNode result,
+        boolean publicShared,
         Instant createdAt
 ) {
 }

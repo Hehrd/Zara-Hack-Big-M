@@ -64,13 +64,13 @@ public class FriendService {
     @Transactional
     public List<AnalysisSummaryDTO> getFriendAnalyses(Long meId, Long friendId) {
         requireFriendship(meId, friendId);
-        return analysisService.getAnalysisSummaries(friendId);
+        return analysisService.getPublicAnalysisSummaries(friendId);
     }
 
     @Transactional
     public AnalysisDetailDTO getFriendAnalysisDetail(Long meId, Long friendId, Long analysisId) {
         requireFriendship(meId, friendId);
-        return analysisService.getAnalysisDetail(friendId, analysisId);
+        return analysisService.getPublicAnalysisDetail(friendId, analysisId);
     }
 
     @Transactional

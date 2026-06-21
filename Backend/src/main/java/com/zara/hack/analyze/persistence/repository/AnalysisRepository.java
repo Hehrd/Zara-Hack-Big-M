@@ -10,5 +10,9 @@ public interface AnalysisRepository extends JpaRepository<AnalysisEntity, Long> 
 
     List<AnalysisEntity> findAllByUserIdOrderByCreatedAtDesc(Long userId);
 
+    List<AnalysisEntity> findAllByUserIdAndPublicSharedTrueOrderByCreatedAtDesc(Long userId);
+
     Optional<AnalysisEntity> findByIdAndUserId(Long id, Long userId);
+
+    Optional<AnalysisEntity> findByIdAndUserIdAndPublicSharedTrue(Long id, Long userId);
 }

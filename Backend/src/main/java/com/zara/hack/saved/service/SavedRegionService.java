@@ -127,7 +127,19 @@ public class SavedRegionService {
                 e.getRequestedResultCount(),
                 e.getNotes(),
                 List.copyOf(e.getTags()),
+                e.isPublicShared(),
                 e.getCreatedAt(),
                 e.getUpdatedAt());
+    }
+
+    @Transactional
+    public ResSavedRegionDTO updateVisibility(Long userId, Long id, boolean publicShared) {
+        SavedRegionEntity entity = findOwned(userId, id);
+        if (publicShared && !entity.getAnalysis().isPublicShared()) {
+            throw new CustomException(HttpStatus.CONFLICT,
+                    "A location cannot be public while its parent analysis is private");
+        }
+        entity.setPublicShared(publicShared);
+        return toDto(savedRegionRepository.saveAndFlush(entity));
     }
 }

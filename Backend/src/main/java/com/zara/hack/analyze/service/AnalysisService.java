@@ -15,6 +15,7 @@ import com.zara.hack.location.controller.dto.CombinedLocationResponse;
 import com.zara.hack.location.controller.dto.LayerWeight;
 import com.zara.hack.location.controller.dto.LocationExplanation;
 import com.zara.hack.location.controller.dto.LsoaScore;
+import com.zara.hack.saved.persistence.repository.SavedRegionRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -32,11 +33,14 @@ public class AnalysisService {
 
     private final AnalysisRepository analysisRepository;
     private final AppUserRepository userRepository;
+    private final SavedRegionRepository savedRegionRepository;
     private final JsonMapper jsonMapper = new JsonMapper();
 
-    public AnalysisService(AnalysisRepository analysisRepository, AppUserRepository userRepository) {
+    public AnalysisService(AnalysisRepository analysisRepository, AppUserRepository userRepository,
+                           SavedRegionRepository savedRegionRepository) {
         this.analysisRepository = analysisRepository;
         this.userRepository = userRepository;
+        this.savedRegionRepository = savedRegionRepository;
     }
 
     @Transactional
@@ -59,7 +63,15 @@ public class AnalysisService {
     public List<AnalysisSummaryDTO> getAnalysisSummaries(Long userId) {
         return analysisRepository.findAllByUserIdOrderByCreatedAtDesc(userId).stream()
                 .map(e -> new AnalysisSummaryDTO(e.getId(), e.getCity(), e.getBusinessDescription(),
-                        e.getRequestedResultCount(), e.getCreatedAt()))
+                        e.getRequestedResultCount(), e.isPublicShared(), e.getCreatedAt()))
+                .toList();
+    }
+
+    @Transactional
+    public List<AnalysisSummaryDTO> getPublicAnalysisSummaries(Long userId) {
+        return analysisRepository.findAllByUserIdAndPublicSharedTrueOrderByCreatedAtDesc(userId).stream()
+                .map(e -> new AnalysisSummaryDTO(e.getId(), e.getCity(), e.getBusinessDescription(),
+                        e.getRequestedResultCount(), true, e.getCreatedAt()))
                 .toList();
     }
 
@@ -73,7 +85,28 @@ public class AnalysisService {
                 e.getRequestedResultCount(),
                 e.getRegion() == null ? null : jsonMapper.readTree(e.getRegion()),
                 e.getResult() == null ? null : jsonMapper.readTree(e.getResult()),
+                e.isPublicShared(),
                 e.getCreatedAt());
+    }
+
+    @Transactional
+    public AnalysisDetailDTO getPublicAnalysisDetail(Long ownerId, Long analysisId) {
+        AnalysisEntity e = analysisRepository.findByIdAndUserIdAndPublicSharedTrue(analysisId, ownerId)
+                .orElseThrow(() -> new AnalysisNotFoundException("Analysis not found or private"));
+        return new AnalysisDetailDTO(e.getId(), e.getCity(), e.getBusinessDescription(),
+                e.getRequestedResultCount(), e.getRegion() == null ? null : jsonMapper.readTree(e.getRegion()),
+                e.getResult() == null ? null : jsonMapper.readTree(e.getResult()), true, e.getCreatedAt());
+    }
+
+    @Transactional
+    public AnalysisDetailDTO updateVisibility(Long userId, Long analysisId, boolean publicShared) {
+        AnalysisEntity entity = findOwnedAnalysis(userId, analysisId);
+        entity.setPublicShared(publicShared);
+        if (!publicShared) {
+            savedRegionRepository.findAllByAnalysisId(analysisId).forEach(region -> region.setPublicShared(false));
+        }
+        analysisRepository.saveAndFlush(entity);
+        return getAnalysisDetail(userId, analysisId);
     }
 
     @Transactional

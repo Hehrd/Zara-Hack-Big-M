@@ -11,6 +11,7 @@ public record AnalysisSummaryDTO(
         String city,
         String businessDescription,
         Integer requestedResultCount,
+        boolean publicShared,
         Instant createdAt
 ) {
 }

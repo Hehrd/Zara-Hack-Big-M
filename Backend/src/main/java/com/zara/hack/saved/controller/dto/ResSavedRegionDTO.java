@@ -20,6 +20,7 @@ public record ResSavedRegionDTO(
         Integer requestedResultCount,
         String notes,
         List<String> tags,
+        boolean publicShared,
         Instant createdAt,
         Instant updatedAt
 ) {

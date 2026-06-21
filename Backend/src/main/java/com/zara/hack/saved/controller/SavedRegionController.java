@@ -4,6 +4,7 @@ import com.zara.hack.saved.controller.dto.ReqSaveRegionDTO;
 import com.zara.hack.saved.controller.dto.ReqUpdateSavedRegionDTO;
 import com.zara.hack.saved.controller.dto.ResSavedRegionDTO;
 import com.zara.hack.saved.service.SavedRegionService;
+import com.zara.hack.common.dto.ReqVisibilityDTO;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -53,6 +54,12 @@ public class SavedRegionController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id) {
         savedRegionService.delete(userId(jwt), id);
+    }
+
+    @PutMapping("/{id}/visibility")
+    public ResSavedRegionDTO updateVisibility(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id,
+                                              @RequestBody ReqVisibilityDTO request) {
+        return savedRegionService.updateVisibility(userId(jwt), id, request.publicShared());
     }
 
     private Long userId(Jwt jwt) {

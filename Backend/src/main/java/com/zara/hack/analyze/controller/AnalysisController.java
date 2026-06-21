@@ -6,6 +6,7 @@ import com.zara.hack.analyze.controller.dto.AnalysisSummaryDTO;
 import com.zara.hack.analyze.controller.dto.ReqAnalysisDTO;
 import com.zara.hack.analyze.controller.dto.ReqRescoreDTO;
 import com.zara.hack.analyze.controller.dto.ResAnalysisDTO;
+import com.zara.hack.common.dto.ReqVisibilityDTO;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -54,6 +55,12 @@ public class AnalysisController {
                                      @PathVariable Long id,
                                      @Valid @RequestBody ReqRescoreDTO request) {
         return analysisService.rescoreAnalysis(userId(jwt), id, request);
+    }
+
+    @PutMapping("/{id}/visibility")
+    public AnalysisDetailDTO updateVisibility(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id,
+                                              @RequestBody ReqVisibilityDTO request) {
+        return analysisService.updateVisibility(userId(jwt), id, request.publicShared());
     }
 
     @PutMapping("/{id}")
