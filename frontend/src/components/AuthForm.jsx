@@ -38,7 +38,12 @@ export function AuthForm({ mode }) {
       const tokens = await logIn({ email, password })
       saveAuthSession(tokens, email)
       setUser({ id: email, name: email.split('@')[0], email })
-      navigate({ to: '/dashboard' })
+      const pendingFriendToken = sessionStorage.getItem('locus-pending-friend-token')
+      if (pendingFriendToken) {
+        navigate({ to: '/api/add-friend/$token', params: { token: pendingFriendToken } })
+      } else {
+        navigate({ to: '/dashboard' })
+      }
     } catch (requestError) {
       setError(requestError.response?.data?.message || 'Unable to connect to the server. Please try again.')
     } finally {

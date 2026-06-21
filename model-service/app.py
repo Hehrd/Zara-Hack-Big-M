@@ -34,6 +34,22 @@ NEED_CONCEPTS = [
     "competing businesses nearby",
     "complementary nearby venues and amenities",
     "dense urban population",
+    "halal food and muslim community",
+    "kosher food and jewish community",
+    "south asian and indian community",
+    "diaspora and migrant communities",
+    "non-english speakers needing language services",
+    "families with dependent children",
+    "schoolchildren and tutoring",
+    "older people and health needs",
+    "people with disabilities or poor health",
+    "low car ownership walkable neighbourhood",
+    "private renters and transient residents",
+    "single person households",
+    "retail and shopping workers",
+    "hospitality and food service workers",
+    "healthcare and social care workers",
+    "education sector workers",
 ]
 
 # Short semantic gloss per supported category for stronger embedding matches.
@@ -49,6 +65,50 @@ CATEGORY_GLOSS = {
     "household_deprivation": "household deprivation and lower-income areas",
     "competitors": "competing businesses and market saturation nearby",
     "relevant_locations": "complementary nearby places such as schools, offices and amenities",
+    # Ethnic group shares
+    "ethnic_asian": "asian residents, south asian indian pakistani bangladeshi chinese community",
+    "ethnic_black": "black african and caribbean community",
+    "ethnic_mixed": "mixed and multiple ethnic background residents",
+    "ethnic_other": "other ethnic group residents including arab",
+    # Religion shares
+    "religion_christian": "christian community and churchgoers",
+    "religion_muslim": "muslim community, halal food and islamic services",
+    "religion_hindu": "hindu community and indian cultural goods",
+    "religion_jewish": "jewish community and kosher food",
+    "religion_sikh": "sikh community and punjabi cultural goods",
+    "religion_none": "secular residents with no religion",
+    # Country of birth
+    "born_outside_uk": "residents born abroad, migrant and diaspora communities",
+    "born_eu": "european-born residents and eu migrant community",
+    "born_non_eu": "non-european migrant communities from asia africa and elsewhere",
+    # Language
+    "english_not_main": "residents whose main language is not english, needing translation",
+    "english_limited": "residents with limited english needing language support services",
+    # Passports
+    "foreign_passport": "residents holding foreign passports, international and migrant community",
+    # Health & disability
+    "health_bad": "residents in bad health needing pharmacies clinics and care",
+    "disability": "disabled residents needing accessible services and mobility support",
+    # Work
+    "full_time_workers": "full-time workers and busy professionals",
+    "occupation_professional": "managers, professionals and skilled white-collar workforce",
+    "social_grade_ab": "affluent high social grade professional and managerial residents with spending power",
+    "industry_retail": "people working in retail and wholesale shops",
+    "industry_hospitality": "people working in hospitality, restaurants and food service",
+    "industry_professional": "people working in professional scientific and technical services",
+    "industry_education": "people working in education, teachers and school staff",
+    "industry_health": "people working in health and social care",
+    # Household & housing
+    "single_person_household": "single person households living alone",
+    "households_with_children": "families with dependent children",
+    "flats_share": "residents living in flats and apartments",
+    "private_renters": "private renters and transient younger residents",
+    "overcrowded": "overcrowded households and pressured housing",
+    # Students, cars, travel, second address
+    "students_share": "schoolchildren and full-time students, tutoring and study needs",
+    "no_car_household": "households with no car, walkable neighbourhood and local convenience",
+    "short_commute": "residents working from home or with a short local commute",
+    "student_second_address": "students with a term-time second address",
 }
 
 NEED_THRESHOLD = 0.22       # min similarity for a need to be detected

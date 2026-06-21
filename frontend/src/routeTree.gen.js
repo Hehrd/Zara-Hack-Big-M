@@ -5,6 +5,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as MapsRouteImport } from './routes/maps'
 import { Route as LoginRouteImport } from './routes/login'
@@ -14,8 +15,16 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as CompareRouteImport } from './routes/compare'
 import { Route as AlertsRouteImport } from './routes/alerts'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as FriendsIndexRouteImport } from './routes/friends.index'
 import { Route as DevicesIdRouteImport } from './routes/devices.$id'
+import { Route as ApiAddFriendTokenRouteImport } from './routes/api.add-friend.$token'
+import { Route as FriendsFriendIdAnalysesAnalysisIdRouteImport } from './routes/friends.$friendId.analyses.$analysisId'
 
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+})
 const RegisterRoute = RegisterRouteImport.update({
   id: '/register',
   path: '/register',
@@ -61,11 +70,27 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 })
+const FriendsIndexRoute = FriendsIndexRouteImport.update({
+  id: '/friends/',
+  path: '/friends/',
+  getParentRoute: () => rootRouteImport,
+})
 const DevicesIdRoute = DevicesIdRouteImport.update({
   id: '/$id',
   path: '/$id',
   getParentRoute: () => DevicesRoute,
 })
+const ApiAddFriendTokenRoute = ApiAddFriendTokenRouteImport.update({
+  id: '/api/add-friend/$token',
+  path: '/api/add-friend/$token',
+  getParentRoute: () => rootRouteImport,
+})
+const FriendsFriendIdAnalysesAnalysisIdRoute =
+  FriendsFriendIdAnalysesAnalysisIdRouteImport.update({
+    id: '/friends/$friendId/analyses/$analysisId',
+    path: '/friends/$friendId/analyses/$analysisId',
+    getParentRoute: () => rootRouteImport,
+  })
 
 const DevicesRouteChildren = {
   DevicesIdRoute: DevicesIdRoute,
@@ -84,5 +109,10 @@ const rootRouteChildren = {
   LoginRoute: LoginRoute,
   MapsRoute: MapsRoute,
   RegisterRoute: RegisterRoute,
+  SettingsRoute: SettingsRoute,
+  FriendsIndexRoute: FriendsIndexRoute,
+  ApiAddFriendTokenRoute: ApiAddFriendTokenRoute,
+  FriendsFriendIdAnalysesAnalysisIdRoute:
+    FriendsFriendIdAnalysesAnalysisIdRoute,
 }
 export const routeTree = rootRouteImport._addFileChildren(rootRouteChildren)

@@ -18,6 +18,7 @@ import com.zara.hack.analyze.persistence.entity.AnalysisEntity;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Entity
 @Table(name = "users")
@@ -39,6 +40,9 @@ public class AppUser {
     @Column(nullable = false, length = 32)
     private Role role;
 
+    @Column(unique = true, length = 64)
+    private String friendToken;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -49,6 +53,9 @@ public class AppUser {
     void onCreate() {
         if (createdAt == null) {
             createdAt = Instant.now();
+        }
+        if (friendToken == null) {
+            friendToken = UUID.randomUUID().toString();
         }
     }
 }
