@@ -27,6 +27,7 @@
     "msw": "^2.14.6",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
+    "recharts": "^3.8.1",
     "shadcn": "^4.11.0",
     "tailwind-merge": "^3.6.0",
     "tslib": "^2.8.1",

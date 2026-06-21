@@ -3,7 +3,8 @@ import { useMutation } from '@tanstack/react-query'
 import { getRouteApi, useNavigate } from '@tanstack/react-router'
 import { GoogleMapsOverlay } from '@deck.gl/google-maps'
 import { GeoJsonLayer, ScatterplotLayer } from '@deck.gl/layers'
-import { Bookmark, BookmarkCheck, Building2, Compass, Eraser, Flag, GitCompareArrows, LoaderCircle, MapPin, RotateCcw, Rotate3D, SlidersHorizontal, Sparkles, Trophy, TrendingDown, TrendingUp, X } from 'lucide-react'
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
+import { Bookmark, BookmarkCheck, Building2, Eraser, Flag, GitCompareArrows, LoaderCircle, MapPin, Menu, RotateCcw, Rotate3D, SlidersHorizontal, Sparkles, Trophy, TrendingDown, TrendingUp, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { loadGoogleMaps } from '@/lib/googleMaps'
@@ -14,6 +15,7 @@ import { useSaveRegion } from '@/hooks/useSavedRegions'
 const routeApi = getRouteApi('/maps')
 
 const LONDON_CENTER = { lat: 51.5074, lng: -0.1278 }
+const EASE = [0.22, 1, 0.36, 1]
 
 function pointInPolygon(point, polygon) {
   let inside = false
@@ -188,6 +190,8 @@ export function MapsPage() {
   const [comparisonAreas, setComparisonAreas] = useState([])
   const [isComparisonOpen, setIsComparisonOpen] = useState(false)
   const [regionContextMenu, setRegionContextMenu] = useState(null)
+  const [isPanelOpen, setIsPanelOpen] = useState(true)
+  const reduceMotion = useReducedMotion()
 
   const { analysis: analysisParam } = routeApi.useSearch()
   const storedAnalysis = useAnalysis(analysisParam)
@@ -358,6 +362,7 @@ export function MapsPage() {
     const resultCount = Math.max(1, Math.min(20, Number(requestedResultCount) || 1))
     setRequestedResultCount(resultCount)
     setSubmittedResultCount(resultCount)
+    setIsPanelOpen(true)
     recommend.mutate({ city: trimmedCity, region, businessDescription: trimmedDescription, requestedResultCount: resultCount })
     if (areaMode === 'custom') clearCustomArea()
   }
@@ -530,8 +535,33 @@ export function MapsPage() {
         <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => rotateMap(15)} title="Rotate right" aria-label="Rotate right">↷</Button>
       </div>}
 
-      <aside className="absolute inset-x-3 bottom-3 z-20 max-h-[72%] overflow-auto rounded-[24px] border bg-white/96 p-5 shadow-[0_24px_70px_-20px_rgba(14,35,27,.45)] backdrop-blur lg:inset-y-5 lg:left-5 lg:right-auto lg:max-h-none lg:w-[380px] lg:rounded-[28px] lg:p-6">
-        <div className="mb-6 flex items-start justify-between"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Locus explorer</p><h1 className="mt-2 text-2xl font-semibold tracking-[-0.035em]">Find your next area</h1><p className="mt-2 text-sm leading-6 text-muted-foreground">Describe your business and a city. We score every LSOA and map the best areas.</p></div><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-700"><Compass className="size-5" /></span></div>
+      <AnimatePresence initial={false}>
+        {!isPanelOpen && (
+          <motion.div
+            key="explorer-open"
+            className="absolute left-4 top-4 z-20 lg:left-6 lg:top-6"
+            initial={reduceMotion ? { opacity: 1 } : { opacity: 0, y: -8, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8, scale: 0.96 }}
+            transition={{ duration: 0.22, ease: EASE }}
+          >
+            <Button type="button" className="h-10 rounded-xl bg-[#173f31] px-4 text-white shadow-xl transition-[background-color,box-shadow,transform] duration-300 hover:-translate-y-0.5 hover:bg-[#215541] hover:shadow-2xl" onClick={() => setIsPanelOpen(true)}>
+              <Menu className="size-4" /> Explorer
+            </Button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence initial={false}>
+      {isPanelOpen && <motion.aside
+        key="explorer-panel"
+        className="absolute inset-x-3 bottom-3 z-20 max-h-[78%] overflow-auto rounded-[26px] border border-white/70 bg-white/95 p-5 shadow-[0_28px_80px_-28px_rgba(14,35,27,.55)] backdrop-blur-xl lg:inset-y-5 lg:left-5 lg:right-auto lg:max-h-none lg:w-[430px] lg:rounded-[30px] lg:p-6"
+        initial={reduceMotion ? { opacity: 1 } : { opacity: 0, x: -24, scale: 0.985 }}
+        animate={{ opacity: 1, x: 0, scale: 1 }}
+        exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: -18, scale: 0.985 }}
+        transition={{ type: 'spring', stiffness: 420, damping: 34, mass: 0.75 }}
+      >
+        <div className="mb-6 flex items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Locus explorer</p><h1 className="mt-2 text-2xl font-semibold tracking-[-0.035em]">Find your next area</h1><p className="mt-2 text-sm leading-6 text-muted-foreground">Score, tune, and compare locations without losing the map.</p></div><Button type="button" size="icon-sm" variant="ghost" className="shrink-0 rounded-xl" onClick={() => setIsPanelOpen(false)} aria-label="Close explorer panel"><X className="size-4" /></Button></div>
 
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div className="space-y-2"><p className="text-sm font-medium">Target area</p><div className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1">
@@ -567,8 +597,9 @@ export function MapsPage() {
 
         {!result && !recommend.isPending && <div className="mt-6 rounded-2xl bg-[#f3f6f1] p-4"><div className="flex items-center gap-2 text-sm font-medium"><Sparkles className="size-4 text-emerald-700" /> What happens next</div><p className="mt-2 text-xs leading-5 text-muted-foreground">The backend scores every area, returns a ranked surface, and Locus colors the map. Click any area to inspect its score.</p></div>}
 
-        {result && <ResultPanel result={result} selected={selected} selectedExplanation={selectedExplanation} explanationFor={explanationFor} onLocationSelect={showRankedLocation} canSave={analysisId != null} onSaveRegion={handleSaveRegion} savedCodes={savedCodes} savingCode={saveRegion.isPending ? saveRegion.variables?.lsoaCode : null} onApplyWeights={handleApplyWeights} rescoring={rescore.isPending} rescoreError={rescore.error} />}
-      </aside>
+        {result && <ResultPanel result={result} selected={selected} selectedExplanation={selectedExplanation} onLocationSelect={showRankedLocation} canSave={analysisId != null} onSaveRegion={handleSaveRegion} savedCodes={savedCodes} savingCode={saveRegion.isPending ? saveRegion.variables?.lsoaCode : null} onApplyWeights={handleApplyWeights} rescoring={rescore.isPending} rescoreError={rescore.error} />}
+      </motion.aside>}
+      </AnimatePresence>
 
       {result && (isComparisonOpen ? <div className="absolute right-4 top-32 z-20 w-72 rounded-2xl border bg-slate-950 p-4 text-white shadow-xl lg:right-6">
         <div className="flex items-center justify-between"><p className="flex items-center gap-2 text-sm font-semibold"><GitCompareArrows className="size-4 text-emerald-400" /> Compare regions</p><button type="button" className="rounded-lg p-1 text-white/55 hover:bg-white/10 hover:text-white" onClick={() => setIsComparisonOpen(false)} aria-label="Close comparison tray"><X className="size-4" /></button></div>
@@ -612,7 +643,8 @@ export function MapsPage() {
 }
 
 function WeightsEditor({ result, canApply, onApply, rescoring, rescoreError }) {
-  const layerWeights = result.layer_weights ?? []
+  const reduceMotion = useReducedMotion()
+  const layerWeights = useMemo(() => result.layer_weights ?? [], [result.layer_weights])
 
   const nameFor = useMemo(() => {
     const map = {}
@@ -624,15 +656,14 @@ function WeightsEditor({ result, canApply, onApply, rescoring, rescoreError }) {
     const map = {}
     for (const w of layerWeights) map[w.category_id] = w.weight
     return map
-  }, [result])
+  }, [layerWeights])
 
   const bound = useMemo(() => {
     const max = Math.max(1, ...layerWeights.map((w) => Math.abs(w.weight)))
     return Math.ceil(max * 10) / 10
-  }, [result])
+  }, [layerWeights])
 
   const [draft, setDraft] = useState(initial)
-  useEffect(() => { setDraft(initial) }, [initial])
 
   if (layerWeights.length === 0) return null
 
@@ -643,39 +674,69 @@ function WeightsEditor({ result, canApply, onApply, rescoring, rescoreError }) {
   }
 
   return (
-    <div className="rounded-2xl border bg-white p-4">
-      <div className="flex items-center justify-between gap-2">
-        <p className="flex items-center gap-2 text-sm font-semibold"><SlidersHorizontal className="size-4 text-emerald-700" /> Scoring weights</p>
+    <motion.div
+      className="rounded-2xl border bg-white p-3.5 shadow-[0_12px_32px_-24px_rgba(15,23,42,.7)]"
+      initial={reduceMotion ? false : { opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.32, ease: EASE }}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="flex items-center gap-2 text-sm font-semibold"><SlidersHorizontal className="size-4 text-emerald-700" /> Scoring weights</p>
+          <p className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">{layerWeights.length} factors</p>
+        </div>
         <button type="button" className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground disabled:opacity-40" disabled={!dirty || rescoring} onClick={() => setDraft(initial)}><RotateCcw className="size-3" /> Reset</button>
       </div>
-      <p className="mt-1 text-[11px] leading-4 text-muted-foreground">These weights decide how each area is scored. Drag to emphasize or penalize a factor, then apply to re-rank.</p>
-      <div className="mt-3 space-y-3">
+      <motion.div
+        className="mt-3 max-h-72 space-y-1 overflow-y-auto pr-1"
+        initial="hidden"
+        animate="visible"
+        variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.018 } } }}
+      >
         {layerWeights.map((w) => {
           const value = draft[w.category_id] ?? w.weight
           return (
-            <div key={w.category_id}>
-              <div className="flex items-center justify-between text-[11px]">
-                <span className="font-medium" title={w.reason}>{nameFor(w.category_id)}</span>
-                <span className={`font-semibold tabular-nums ${value < 0 ? 'text-amber-600' : 'text-emerald-700'}`}>{value.toFixed(2)}</span>
+            <motion.div
+              key={w.category_id}
+              className="rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2 transition-colors hover:border-emerald-200 hover:bg-white"
+              variants={{
+                hidden: reduceMotion ? { opacity: 1 } : { opacity: 0, y: 6 },
+                visible: { opacity: 1, y: 0 },
+              }}
+              whileHover={reduceMotion ? undefined : { x: 2 }}
+              transition={{ duration: 0.22, ease: EASE }}
+            >
+              <div className="flex items-center justify-between gap-3 text-[11px]">
+                <span className="min-w-0 truncate font-medium" title={w.reason}>{nameFor(w.category_id)}</span>
+                <span className={`shrink-0 font-semibold tabular-nums ${value < 0 ? 'text-amber-600' : 'text-emerald-700'}`}>{value.toFixed(2)}</span>
               </div>
-              <input type="range" min={-bound} max={bound} step="0.01" value={value} disabled={rescoring} onChange={(e) => setDraft((d) => ({ ...d, [w.category_id]: Number(e.target.value) }))} className="mt-1 h-1.5 w-full cursor-pointer appearance-none rounded-full bg-slate-200 accent-emerald-600 disabled:cursor-not-allowed" />
-            </div>
+              <input type="range" min={-bound} max={bound} step="0.01" value={value} disabled={rescoring} onChange={(e) => setDraft((d) => ({ ...d, [w.category_id]: Number(e.target.value) }))} className="mt-1.5 h-1 w-full cursor-pointer appearance-none rounded-full bg-slate-200 accent-emerald-600 disabled:cursor-not-allowed" />
+            </motion.div>
           )
         })}
-      </div>
+      </motion.div>
       {rescoreError && <p role="alert" className="mt-3 rounded-lg bg-destructive/10 p-2 text-[11px] text-destructive">{rescoreError.response?.data?.message || rescoreError.message}</p>}
       <Button type="button" size="sm" className="mt-3 w-full" disabled={!canApply || rescoring || !dirty} onClick={apply}>
         {rescoring ? <><LoaderCircle className="size-4 animate-spin" /> Applying…</> : <><SlidersHorizontal className="size-4" /> Apply weights</>}
       </Button>
       {!canApply && <p className="mt-2 text-[10px] text-muted-foreground">Run or open an analysis to adjust weights.</p>}
-    </div>
+    </motion.div>
   )
 }
 
-function ResultPanel({ result, selected, selectedExplanation, explanationFor, onLocationSelect, canSave, onSaveRegion, savedCodes, savingCode, onApplyWeights, rescoring, rescoreError }) {
+function ResultPanel({ result, selected, selectedExplanation, onLocationSelect, canSave, onSaveRegion, savedCodes, savingCode, onApplyWeights, rescoring, rescoreError }) {
+  const reduceMotion = useReducedMotion()
+  const rankedLocations = result.ranked_locations ?? []
+  const weightsKey = (result.layer_weights ?? []).map((w) => `${w.category_id}:${w.weight}`).join('|')
+
   return (
-    <div className="mt-6 space-y-5 border-t pt-5">
-      <div>
+    <motion.div
+      className="mt-6 space-y-5 border-t pt-5"
+      initial={reduceMotion ? false : { opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.34, ease: EASE }}
+    >
+      <motion.div initial={reduceMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.28, ease: EASE }}>
         <p className="text-xs text-muted-foreground">Detected business type</p>
         <p className="mt-1 text-sm font-semibold">{result.business_needs?.business_type}</p>
         {result.business_needs?.needs?.length > 0 && (
@@ -685,12 +746,17 @@ function ResultPanel({ result, selected, selectedExplanation, explanationFor, on
             ))}
           </div>
         )}
-      </div>
+      </motion.div>
 
-      <WeightsEditor result={result} canApply={canSave} onApply={onApplyWeights} rescoring={rescoring} rescoreError={rescoreError} />
+      <WeightsEditor key={weightsKey} result={result} canApply={canSave} onApply={onApplyWeights} rescoring={rescoring} rescoreError={rescoreError} />
 
       {selected && (
-        <div className="rounded-2xl border bg-white p-4">
+        <motion.div
+          className="rounded-2xl border bg-white p-4 shadow-[0_18px_42px_-34px_rgba(15,23,42,.7)]"
+          initial={reduceMotion ? { opacity: 1 } : { opacity: 0, y: 10, scale: 0.985 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.28, ease: EASE }}
+        >
           <div className="flex items-center justify-between gap-2"><div><p className="text-sm font-semibold">{selected.lsoaName}</p><p className="text-[11px] text-muted-foreground">{selected.lsoaCode}</p></div><span className="flex items-center gap-1 rounded-full bg-slate-900 px-2.5 py-1 text-[10px] font-semibold text-white"><Flag className="size-3" /> {Number(selected.score).toFixed(3)}</span></div>
           {selectedExplanation && <p className="mt-3 border-t pt-3 text-[11px] leading-5 text-slate-700">{selectedExplanation.explanation}</p>}
           {canSave && (() => {
@@ -702,29 +768,47 @@ function ResultPanel({ result, selected, selectedExplanation, explanationFor, on
               </Button>
             )
           })()}
-        </div>
+        </motion.div>
       )}
 
-      <div className="space-y-3">
-        <p className="flex items-center gap-2 text-sm font-semibold"><Trophy className="size-4 text-amber-500" /> Top {result.ranked_locations?.length} areas</p>
-        {result.ranked_locations?.map((loc, index) => {
-          const explanation = explanationFor(loc.lsoa_code)
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-3">
+          <p className="flex items-center gap-2 text-sm font-semibold"><Trophy className="size-4 text-amber-500" /> Top areas</p>
+          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-600">{rankedLocations.length} ranked</span>
+        </div>
+        <motion.div
+          className="-mt-1 max-h-96 space-y-2 overflow-y-auto px-1 pb-1 pt-2"
+          initial="hidden"
+          animate="visible"
+          variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.025 } } }}
+        >
+        {rankedLocations.map((loc, index) => {
           const weights = Object.entries(loc.weighted_layer_values || {}).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
           return (
-            <div key={loc.lsoa_code} className={`rounded-2xl border bg-white p-4 transition hover:border-emerald-400 hover:shadow-md ${selected?.lsoaCode === loc.lsoa_code ? 'border-emerald-500 ring-2 ring-emerald-500/20' : ''}`}>
+            <motion.div
+              key={loc.lsoa_code}
+              className={`rounded-xl border bg-white p-2.5 transition-colors hover:border-emerald-400 ${selected?.lsoaCode === loc.lsoa_code ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'border-border'}`}
+              variants={{
+                hidden: reduceMotion ? { opacity: 1 } : { opacity: 0, y: 8 },
+                visible: { opacity: 1, y: 0 },
+              }}
+              whileHover={reduceMotion ? undefined : { y: -2, boxShadow: '0 18px 42px -32px rgba(20,57,43,.72)' }}
+              whileTap={reduceMotion ? undefined : { scale: 0.995 }}
+              transition={{ type: 'spring', stiffness: 420, damping: 30 }}
+            >
               <button type="button" className="w-full text-left focus-visible:outline-none" onClick={() => onLocationSelect(loc)} aria-label={`Show ${loc.lsoa_name} on the map`}>
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <p className="text-sm font-semibold">#{index + 1} · {loc.lsoa_name}</p>
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold">#{index + 1} · {loc.lsoa_name}</p>
                   <p className="text-[11px] text-muted-foreground">{loc.lsoa_code}</p>
                 </div>
                 <span className="rounded-full bg-slate-900 px-2.5 py-1 text-[10px] font-semibold text-white">{loc.final_score.toFixed(3)}</span>
               </div>
               {weights.length > 0 && (
-                <div className="mt-3 space-y-1.5">
-                  {weights.slice(0, 4).map(([id, value]) => (
+                <div className="mt-2 grid gap-1 sm:grid-cols-2">
+                  {weights.slice(0, 2).map(([id, value]) => (
                     <div key={id} className="flex items-center justify-between text-[11px]">
-                      <span className="text-muted-foreground">{formatLayerName(id)}</span>
+                      <span className="truncate pr-2 text-muted-foreground">{formatLayerName(id)}</span>
                       <span className={value < 0 ? 'flex items-center gap-1 font-medium text-rose-600' : 'flex items-center gap-1 font-medium text-emerald-700'}>
                         {value < 0 ? <TrendingDown className="size-3" /> : <TrendingUp className="size-3" />}
                         {value.toFixed(3)}
@@ -733,17 +817,12 @@ function ResultPanel({ result, selected, selectedExplanation, explanationFor, on
                   ))}
                 </div>
               )}
-              {explanation && (
-                <div className="mt-3 border-t pt-3">
-                  <p className="text-[11px] leading-5 text-slate-700">{explanation.explanation}</p>
-                  <span className={`mt-2 inline-block rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${explanation.provider?.includes('Grok') ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-600'}`}>{explanation.provider}</span>
-                </div>
-              )}
               </button>
-            </div>
+            </motion.div>
           )
         })}
+        </motion.div>
       </div>
-    </div>
+    </motion.div>
   )
 }

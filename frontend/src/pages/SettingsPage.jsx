@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Check, Copy, KeyRound, Link2, Mail } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -27,7 +27,7 @@ export function SettingsPage() {
       {account && (
         <div className="space-y-6">
           <FriendLinkPanel token={account.friend_token} />
-          <CredentialsPanel account={account} />
+          <CredentialsPanel key={account.email} account={account} />
         </div>
       )}
     </div>
@@ -84,8 +84,6 @@ function CredentialsPanel({ account }) {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
-
-  useEffect(() => { setEmail(account.email) }, [account.email])
 
   function submit(event) {
     event.preventDefault()

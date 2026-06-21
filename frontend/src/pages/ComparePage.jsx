@@ -1,13 +1,11 @@
 import { useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { ArrowLeft, BarChart3, GitCompareArrows, MapPin, Trophy } from 'lucide-react'
-import { AgCharts } from 'ag-charts-react'
-import { BarSeriesModule, CategoryAxisModule, LegendModule, ModuleRegistry, NumberAxisModule } from 'ag-charts-community'
+import { ArrowLeft, GitCompareArrows, MapPin, Radar as RadarIcon, Trophy } from 'lucide-react'
+import { Legend, PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart, ResponsiveContainer, Tooltip } from 'recharts'
 import { Button } from '@/components/ui/button'
 
 const EXCLUDED_METRICS = new Set(['competitors', 'relevant_locations'])
-
-ModuleRegistry.registerModules([BarSeriesModule, CategoryAxisModule, LegendModule, NumberAxisModule])
+const RADAR_COLORS = ['#047857', '#2563eb', '#d97706', '#be123c', '#7c3aed', '#0891b2']
 
 function readComparison() {
   try {
@@ -25,28 +23,40 @@ function formatValue(value) {
   return Number.isFinite(value) ? value.toFixed(3) : '—'
 }
 
+function shortMetricLabel(label) {
+  return label.length > 18 ? `${label.slice(0, 16)}…` : label
+}
+
+function RadarTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null
+
+  return (
+    <div className="min-w-52 rounded-xl border bg-white/95 p-3 text-xs shadow-xl backdrop-blur">
+      <p className="mb-2 font-semibold text-[#17251f]">{label}</p>
+      <div className="space-y-1.5">
+        {payload.map((entry) => (
+          <div key={entry.dataKey} className="flex items-center justify-between gap-4">
+            <span className="flex min-w-0 items-center gap-2 text-muted-foreground">
+              <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: entry.color }} />
+              <span className="truncate">{entry.name}</span>
+            </span>
+            <span className="font-mono font-semibold tabular-nums text-[#17251f]">{formatValue(Number(entry.value))}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function ComparePage() {
   const [comparison] = useState(readComparison)
   const areas = useMemo(() => comparison.areas ?? [], [comparison.areas])
   const categoriesById = useMemo(() => new Map((comparison.categories ?? []).map((category) => [category.category_id, category])), [comparison.categories])
   const metrics = useMemo(() => Array.from(new Set(areas.flatMap((area) => Object.keys(area.weighted_layer_values ?? {})))).filter((metric) => !EXCLUDED_METRICS.has(metric)), [areas])
-  const chartOptions = useMemo(() => ({
-    data: metrics.map((metric) => ({
-      parameter: categoriesById.get(metric)?.display_name ?? formatMetric(metric),
-      ...Object.fromEntries(areas.map((area, index) => [`region_${index}`, area.normalized_layer_values?.[metric] ?? 0])),
-    })),
-    title: { text: 'Region performance by parameter' },
-    subtitle: { text: 'Normalized dataset values from 0 to 1' },
-    series: areas.map((area, index) => ({
-      type: 'bar',
-      xKey: 'parameter',
-      yKey: `region_${index}`,
-      yName: area.lsoa_name,
-    })),
-    legend: { position: 'bottom' },
-    background: { fill: 'transparent' },
-    padding: { top: 24, right: 24, bottom: 16, left: 16 },
-  }), [areas, categoriesById, metrics])
+  const chartData = useMemo(() => metrics.map((metric) => ({
+    parameter: categoriesById.get(metric)?.display_name ?? formatMetric(metric),
+    ...Object.fromEntries(areas.map((area, index) => [`region_${index}`, area.normalized_layer_values?.[metric] ?? 0])),
+  })), [areas, categoriesById, metrics])
 
   if (areas.length < 2) {
     return <main className="min-h-[calc(100vh-4rem)] bg-[#f4f6f2] p-5 lg:min-h-screen lg:p-10"><div className="mx-auto max-w-xl rounded-3xl border bg-white p-8 text-center shadow-sm"><GitCompareArrows className="mx-auto size-10 text-emerald-600" /><h1 className="mt-4 text-2xl font-semibold">No comparison selected</h1><p className="mt-2 text-sm text-muted-foreground">Choose at least two regions from Explore using the right-click menu.</p><Button className="mt-6" nativeButton={false} render={<Link to="/maps" />}><ArrowLeft /> Back to Explore</Button></div></main>
@@ -58,11 +68,50 @@ export function ComparePage() {
         <Button variant="ghost" nativeButton={false} render={<Link to="/maps" />}><ArrowLeft /> Back to map</Button>
         <div className="mt-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
           <div><p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700"><GitCompareArrows className="size-4" /> Region comparison</p><h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em]">Compare {areas.length} regions</h1><p className="mt-2 text-sm text-muted-foreground">{comparison.businessType || 'Opportunity analysis'} · side-by-side ranking signals</p></div>
-          <div className="rounded-xl border bg-white px-4 py-2 text-xs text-muted-foreground"><BarChart3 className="mr-2 inline size-4 text-emerald-600" />Grouped by ranking parameter</div>
+          <div className="rounded-xl border bg-white px-4 py-2 text-xs text-muted-foreground"><RadarIcon className="mr-2 inline size-4 text-emerald-600" />Radar by ranking parameter</div>
         </div>
 
-        <section className="mt-7 rounded-3xl border bg-white p-3 shadow-sm sm:p-5">
-          <div style={{ height: Math.max(420, metrics.length * (80 + areas.length * 8)) }}><AgCharts options={chartOptions} /></div>
+        <section className="mt-7 rounded-3xl border bg-white p-4 shadow-sm sm:p-6">
+          <div className="flex flex-col justify-between gap-2 border-b pb-4 sm:flex-row sm:items-end">
+            <div>
+              <h2 className="flex items-center gap-2 font-semibold"><RadarIcon className="size-4 text-emerald-700" />Region signal shape</h2>
+              <p className="mt-1 text-xs text-muted-foreground">Normalized dataset values from 0 to 1. Wider shape means stronger fit on that parameter.</p>
+            </div>
+            <span className="text-xs text-muted-foreground">{metrics.length} parameters compared</span>
+          </div>
+          <div className="h-[520px] min-h-[460px] min-w-0 sm:h-[620px] xl:h-[700px]">
+            <ResponsiveContainer
+              width="100%"
+              height="100%"
+              minWidth={0}
+              minHeight={460}
+              initialDimension={{ width: 1024, height: 520 }}
+            >
+              <RadarChart data={chartData} outerRadius="72%" margin={{ top: 32, right: 72, bottom: 32, left: 72 }}>
+                <PolarGrid stroke="#d8e2dc" />
+                <PolarAngleAxis dataKey="parameter" tick={{ fill: '#52635a', fontSize: 11 }} tickFormatter={shortMetricLabel} />
+                <PolarRadiusAxis angle={90} domain={[0, 1]} tick={{ fill: '#8a978f', fontSize: 10 }} tickCount={6} />
+                <Tooltip cursor={false} content={<RadarTooltip />} />
+                <Legend wrapperStyle={{ paddingTop: 18, fontSize: 12 }} />
+                {areas.map((area, index) => {
+                  const color = RADAR_COLORS[index % RADAR_COLORS.length]
+                  return (
+                    <Radar
+                      key={area.lsoa_code}
+                      name={area.lsoa_name}
+                      dataKey={`region_${index}`}
+                      stroke={color}
+                      fill={color}
+                      fillOpacity={0.18}
+                      strokeWidth={2}
+                      dot={{ r: 2, fill: color, strokeWidth: 0 }}
+                      activeDot={{ r: 4, fill: color, stroke: '#ffffff', strokeWidth: 2 }}
+                    />
+                  )
+                })}
+              </RadarChart>
+            </ResponsiveContainer>
+          </div>
         </section>
 
         <section className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

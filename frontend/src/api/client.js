@@ -18,7 +18,8 @@ let refreshRequest
 apiClient.interceptors.response.use(undefined, async (error) => {
   const request = error.config
   const session = getAuthSession()
-  if (error.response?.status !== 401 || request?._retried || request?.skipAuthRefresh || !session?.refreshToken) {
+  const isAuthRequest = request?.url?.includes('/api/auth/')
+  if (error.response?.status !== 401 || request?._retried || request?.skipAuthRefresh || isAuthRequest || !session?.refreshToken) {
     return Promise.reject(error)
   }
 
