@@ -156,6 +156,9 @@ function buildPointsLayer(points) {
     pickable: true,
     autoHighlight: true,
     highlightColor: [255, 255, 255, 120],
+    // These are decision markers, not terrain. Keep them legible above the
+    // extruded score surface instead of letting columns hide them in 3D.
+    parameters: { depthTest: false },
   })
 }
 
@@ -166,6 +169,7 @@ export function MapsPage() {
   const overlayRef = useRef(null)
   const mapsEventRef = useRef(null)
   const cameraTransitionListenerRef = useRef(null)
+  const scoreTransitionFrameRef = useRef(null)
   const zoomListenerRef = useRef(null)
   const areaModeRef = useRef('city')
   const polygonConstructorRef = useRef(null)
@@ -182,6 +186,7 @@ export function MapsPage() {
   const [selected, setSelected] = useState(null)
   const [zoom, setZoom] = useState(10)
   const [minimumScore, setMinimumScore] = useState(null)
+  const [transitionScore, setTransitionScore] = useState(null)
   const [areaMode, setAreaMode] = useState('city')
   const [customPoints, setCustomPoints] = useState([])
   const [submittedAreaPoints, setSubmittedAreaPoints] = useState([])
@@ -241,7 +246,8 @@ export function MapsPage() {
     if (!scores.length) return null
     return { min: Math.min(...scores), max: Math.max(...scores) }
   }, [result])
-  const effectiveMinimumScore = minimumScore ?? scoreRange?.min ?? null
+  const effectiveMinimumScore = transitionScore ?? minimumScore ?? scoreRange?.min ?? null
+  const displayedMinimumScore = minimumScore ?? scoreRange?.min ?? null
   const visibleFeatureCollection = useMemo(() => {
     if (!featureCollection || effectiveMinimumScore === null) return featureCollection
     return {
@@ -322,6 +328,7 @@ export function MapsPage() {
     return () => {
       active = false
       cameraTransitionListenerRef.current?.remove()
+      if (scoreTransitionFrameRef.current !== null) cancelAnimationFrame(scoreTransitionFrameRef.current)
       zoomListenerRef.current?.remove()
       polygonPathListenersRef.current.forEach((listener) => listener.remove())
       selectionPolygonRef.current?.setMap(null)
@@ -385,21 +392,65 @@ export function MapsPage() {
     selectionPolygonRef.current?.getPath()?.pop()
   }
 
+  function animateScoreThreshold(from, to, duration, onComplete) {
+    if (scoreTransitionFrameRef.current !== null) cancelAnimationFrame(scoreTransitionFrameRef.current)
+    setTransitionScore(from)
+    let startTime = null
+
+    const animate = (now) => {
+      if (startTime === null) startTime = now
+      const progress = Math.min(1, (now - startTime) / duration)
+      const easedProgress = (1 - Math.cos(Math.PI * progress)) / 2
+      setTransitionScore(from + (to - from) * easedProgress)
+
+      if (progress < 1) {
+        scoreTransitionFrameRef.current = requestAnimationFrame(animate)
+      } else {
+        scoreTransitionFrameRef.current = null
+        onComplete?.()
+      }
+    }
+
+    scoreTransitionFrameRef.current = requestAnimationFrame(animate)
+  }
+
+  function switch3DCamera(next, revealFrom = null, restoreScore = null) {
+    cameraTransitionListenerRef.current?.remove()
+    cameraTransitionListenerRef.current = mapsEventRef.current.addListenerOnce(mapRef.current, 'idle', () => {
+      setIs3D(next)
+      cameraTransitionListenerRef.current = null
+      if (revealFrom === null || restoreScore === null) {
+        setIsTransitioning(false)
+        setTransitionTarget(null)
+        return
+      }
+      requestAnimationFrame(() => {
+        animateScoreThreshold(revealFrom, restoreScore, reduceMotion ? 220 : 1100, () => {
+          setTransitionScore(null)
+          setIsTransitioning(false)
+          setTransitionTarget(null)
+        })
+      })
+    })
+    mapRef.current.setTilt(next ? 55 : 0)
+    mapRef.current.setHeading(next ? 20 : 0)
+  }
+
   function toggle3D() {
     if (!mapRef.current || !mapId || isTransitioning) return
     const next = !is3D
     setIsTransitioning(true)
     setTransitionTarget(next ? '3D' : '2D')
-    overlayRef.current?.setProps({ layers: [] })
-    cameraTransitionListenerRef.current?.remove()
-    cameraTransitionListenerRef.current = mapsEventRef.current.addListenerOnce(mapRef.current, 'idle', () => {
-      setIs3D(next)
-      setIsTransitioning(false)
-      setTransitionTarget(null)
-      cameraTransitionListenerRef.current = null
-    })
-    mapRef.current.setTilt(next ? 55 : 0)
-    mapRef.current.setHeading(next ? 20 : 0)
+    if (scoreRange && effectiveMinimumScore !== null) {
+      const restoreScore = effectiveMinimumScore
+      const step = (scoreRange.max - scoreRange.min) / 100 || 0.001
+      const hiddenScore = scoreRange.max + step
+      animateScoreThreshold(restoreScore, hiddenScore, reduceMotion ? 220 : 1500, () => {
+        switch3DCamera(next, hiddenScore, restoreScore)
+      })
+    } else {
+      switch3DCamera(next)
+    }
   }
 
   function adjustTilt(delta) {
@@ -466,6 +517,7 @@ export function MapsPage() {
     setComparisonAreas([])
     setIsComparisonOpen(false)
     setMinimumScore(null)
+    setTransitionScore(null)
     setSubmittedAreaPoints([])
     clearCustomArea()
     overlayRef.current?.setProps({ layers: [] })
@@ -474,6 +526,8 @@ export function MapsPage() {
     setTransitionTarget(null)
     cameraTransitionListenerRef.current?.remove()
     cameraTransitionListenerRef.current = null
+    if (scoreTransitionFrameRef.current !== null) cancelAnimationFrame(scoreTransitionFrameRef.current)
+    scoreTransitionFrameRef.current = null
     mapRef.current?.setTilt(0)
     mapRef.current?.setHeading(0)
   }
@@ -520,7 +574,7 @@ export function MapsPage() {
           })()}
         </div>
       </>}
-      {isTransitioning && <div className="absolute inset-0 z-30 grid place-items-center bg-slate-950/10 backdrop-blur-[1px]" role="status" aria-live="polite"><div className="flex items-center gap-3 rounded-2xl border border-white/80 bg-white/95 px-5 py-3.5 shadow-xl"><span className="grid size-9 place-items-center rounded-xl bg-emerald-50 text-emerald-700"><LoaderCircle className="size-5 animate-spin" /></span><div><p className="text-sm font-semibold">Switching to {transitionTarget} view</p><p className="mt-0.5 text-xs text-muted-foreground">Preparing the opportunity surface…</p></div></div></div>}
+      {isTransitioning && transitionScore === null && <div className="absolute inset-0 z-30 grid place-items-center bg-slate-950/10 backdrop-blur-[1px]" role="status" aria-live="polite"><div className="flex items-center gap-3 rounded-2xl border border-white/80 bg-white/95 px-5 py-3.5 shadow-xl"><span className="grid size-9 place-items-center rounded-xl bg-emerald-50 text-emerald-700"><LoaderCircle className="size-5 animate-spin" /></span><div><p className="text-sm font-semibold">Switching to {transitionTarget} view</p><p className="mt-0.5 text-xs text-muted-foreground">Preparing the opportunity surface…</p></div></div></div>}
       {mapError && <div role="alert" className="absolute left-1/2 top-8 z-20 w-[min(90%,520px)] -translate-x-1/2 rounded-2xl border border-destructive/30 bg-white p-4 text-sm text-destructive shadow-xl">{mapError}</div>}
 
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-28 bg-gradient-to-b from-black/12 to-transparent" />
@@ -611,15 +665,16 @@ export function MapsPage() {
 
       {result && (
         <div className="absolute bottom-[calc(72%+24px)] right-4 z-20 w-56 rounded-2xl border bg-white/94 p-3 text-xs shadow-lg backdrop-blur lg:bottom-6 lg:right-6">
-          <div className="mb-2 flex items-center justify-between gap-2"><span className="font-medium">Minimum score</span><span className="font-semibold tabular-nums">{effectiveMinimumScore?.toFixed(3)}</span></div>
+          <div className="mb-2 flex items-center justify-between gap-2"><span className="font-medium">Minimum score</span><span className="font-semibold tabular-nums">{displayedMinimumScore?.toFixed(3)}</span></div>
           {scoreRange && <input
             type="range"
             className="mb-2 w-full accent-emerald-600"
             min={scoreRange.min}
             max={scoreRange.max}
             step={(scoreRange.max - scoreRange.min) / 100 || 0.001}
-            value={effectiveMinimumScore ?? scoreRange.min}
+            value={displayedMinimumScore ?? scoreRange.min}
             onChange={(event) => setMinimumScore(Number(event.target.value))}
+            disabled={isTransitioning}
             aria-label="Minimum opportunity score"
           />}
           <div className="h-2 w-full rounded-full" style={{ background: 'linear-gradient(90deg, rgb(30,58,138), rgb(16,185,129), rgb(250,204,21), rgb(239,68,68))' }} />

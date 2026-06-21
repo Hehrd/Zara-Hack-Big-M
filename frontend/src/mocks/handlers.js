@@ -275,4 +275,28 @@ export const handlers = [
 
     return HttpResponse.json({ analysis_id: analysis.id, ...result })
   }),
+  // Keep development-only follow-up reads and cross-origin preflights inside
+  // MSW. The production backend exposes this route as POST only.
+  http.get('*/api/location-recommendations', ({ request }) => {
+    const requestedCount = Number(new URL(request.url).searchParams.get('count')) || 3
+    const resultCount = Math.max(1, Math.min(20, requestedCount))
+    const latestAnalysis = mockAnalyses.at(-1)
+    const result = latestAnalysis?.result ?? recommendationsForRegion({ requestedCount: resultCount })
+
+    return HttpResponse.json({
+      analysis_id: latestAnalysis?.id ?? null,
+      ...result,
+      ranked_locations: [...result.heatmap_layer]
+        .sort((a, b) => b.final_score - a.final_score)
+        .slice(0, resultCount),
+    })
+  }),
+  http.options('*/api/location-recommendations', () => new HttpResponse(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    },
+  })),
 ]
