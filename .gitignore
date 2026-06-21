@@ -9,5 +9,16 @@ data/
 __pycache__/
 *.pyc
 
-# Secrets / local env (Google Maps + xAI keys live here)
+# Secrets / local env (Google Maps, OpenAI, DB + JWT keys live here)
 frontend/.env
+frontend/.env.local
+Backend/.env
+Backend/.env.local
+Backend/.env.*.local
+
+# Claude Code / OpenKBS local runtime artifacts (may contain sensitive context)
+.claude/settings.local.json
+.claude/.plans/
+.claude/plans/
+.openkbs/
+.uploads/
